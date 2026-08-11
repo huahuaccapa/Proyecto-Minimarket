@@ -1,0 +1,10 @@
+'use client';
+
+import { useState } from 'react';
+import { Save, Store, UserRound, BellRing } from 'lucide-react';
+import { PageTitle } from '../components/ui';
+
+export default function SettingsView() {
+  const [saved, setSaved] = useState(false);
+  return <><PageTitle eyebrow="Preferencias" title="Configuración" description="Datos visibles del negocio y preferencias básicas del sistema." /><div className="grid gap-6 xl:grid-cols-[1fr_0.7fr]"><form className="panel p-6" onSubmit={(e) => { e.preventDefault(); setSaved(true); setTimeout(() => setSaved(false), 2500); }}><div className="mb-6 flex items-center gap-3"><span className="grid size-11 place-items-center rounded-2xl bg-mint text-forest"><Store /></span><div><h2 className="font-black">Datos del minimarket</h2><p className="text-xs text-black/40">Se mostrarán en tickets y reportes</p></div></div><div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-bold sm:col-span-2">Nombre comercial<input className="field mt-2" defaultValue="Minimarket Mamá" /></label><label className="text-sm font-bold">RUC o DNI<input className="field mt-2" placeholder="Opcional" /></label><label className="text-sm font-bold">Teléfono<input className="field mt-2" placeholder="+51 999 999 999" /></label><label className="text-sm font-bold sm:col-span-2">Dirección<input className="field mt-2" placeholder="Arequipa, Perú" /></label></div><button className="btn-primary mt-6"><Save size={18} /> Guardar cambios</button>{saved && <span className="ml-3 text-sm font-bold text-forest">Guardado</span>}</form><section className="space-y-4"><article className="panel p-5"><UserRound className="text-forest" /><h3 className="mt-4 font-black">Usuario principal</h3><p className="mt-1 text-sm text-black/40">admin@minimarket.pe</p></article><article className="panel p-5"><BellRing className="text-coral" /><h3 className="mt-4 font-black">Alertas de stock</h3><p className="mt-1 text-sm text-black/40">Activas cuando un producto llega al mínimo.</p></article></section></div></>;
+}

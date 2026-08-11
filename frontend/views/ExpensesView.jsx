@@ -1,0 +1,14 @@
+'use client';
+
+import { useState } from 'react';
+import { Plus, ReceiptText } from 'lucide-react';
+import { Modal, PageTitle } from '../components/ui';
+import { formatDate, formatMoney } from '../data/mock';
+
+export default function ExpensesView({ expenses, onSave }) {
+  const [form, setForm] = useState(null);
+  const total = expenses.reduce((sum, expense) => sum + Number(expense.amount), 0);
+  const open = () => setForm({ date: new Date().toISOString().slice(0, 10), description: '', category: 'Otros', amount: '' });
+  const submit = async (event) => { event.preventDefault(); await onSave({ ...form, amount: Number(form.amount) }); setForm(null); };
+  return <><PageTitle eyebrow="Salidas de dinero" title="Gastos" description="Registra los pagos del negocio para calcular una ganancia real." action={<button className="btn-primary" onClick={open}><Plus size={18} /> Nuevo gasto</button>} /><section className="panel overflow-hidden"><div className="flex items-center justify-between border-b border-black/5 p-5"><div><p className="text-sm text-black/40">Total registrado</p><p className="text-3xl font-black">{formatMoney(total)}</p></div><span className="grid size-12 place-items-center rounded-2xl bg-coral/10 text-coral"><ReceiptText /></span></div><div className="divide-y divide-black/5">{expenses.map((expense) => <div className="flex flex-col justify-between gap-3 p-5 sm:flex-row sm:items-center" key={expense.id}><div><p className="font-bold">{expense.description}</p><p className="mt-1 text-xs text-black/40">{formatDate(expense.date)} · {expense.category}</p></div><strong className="text-coral">− {formatMoney(expense.amount)}</strong></div>)}</div></section>{form && <Modal title="Registrar gasto" onClose={() => setForm(null)}><form className="space-y-4" onSubmit={submit}><label className="block text-sm font-bold">Descripción<input required className="field mt-2" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></label><div className="grid grid-cols-2 gap-4"><label className="text-sm font-bold">Categoría<select className="field mt-2" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}><option>Servicios</option><option>Transporte</option><option>Insumos</option><option>Personal</option><option>Otros</option></select></label><label className="text-sm font-bold">Fecha<input required type="date" className="field mt-2" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></label></div><label className="block text-sm font-bold">Monto<input required min="0" step="0.01" type="number" className="field mt-2" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} /></label><button className="btn-primary w-full">Guardar gasto</button></form></Modal>}</>;
+}

@@ -1,0 +1,70 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: #f7f5ef;
+}
+
+body {
+  margin: 0;
+  color: #14201b;
+  background:
+    radial-gradient(circle at 92% 4%, rgba(245, 185, 66, 0.14), transparent 24rem),
+    #f7f5ef;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+@layer components {
+  .panel {
+    @apply rounded-3xl border border-black/5 bg-white shadow-card;
+  }
+
+  .field {
+    @apply w-full rounded-2xl border border-black/10 bg-white px-4 py-3 outline-none transition focus:border-forest focus:ring-4 focus:ring-forest/10;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-2xl bg-forest px-5 py-3 font-bold text-white transition hover:bg-[#1d5a3e] disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-2xl border border-black/10 bg-white px-4 py-3 font-bold transition hover:bg-black/[0.03];
+  }
+
+  .badge {
+    @apply inline-flex rounded-full px-3 py-1 text-xs font-bold;
+  }
+}
+
+@media print {
+  aside,
+  header,
+  .no-print {
+    display: none !important;
+  }
+
+  main {
+    padding: 0 !important;
+  }
+}
