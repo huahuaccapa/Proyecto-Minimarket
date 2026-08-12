@@ -18,10 +18,11 @@ export default function PosView({ products, onCheckout }) {
   const addProduct = (product) => {
     if (!product) { setMessage('No encontramos ese código. Registra primero el producto.'); return; }
     if (product.stock <= 0) { setMessage('Este producto no tiene stock disponible.'); return; }
+    const step = product.saleUnit === 'kg' ? 0.25 : 1;
     setCart((current) => {
       const exists = current.find((item) => item.id === product.id);
-      if (exists) return current.map((item) => item.id === product.id ? { ...item, quantity: Math.min(item.quantity + 1, item.stock) } : item);
-      return [...current, { ...product, quantity: 1 }];
+      if (exists) return current.map((item) => item.id === product.id ? { ...item, quantity: Math.min(Number((item.quantity + step).toFixed(3)), item.stock) } : item);
+      return [...current, { ...product, quantity: Math.min(step, product.stock) }];
     });
     setBarcode(''); setMessage(`${product.name} agregado`); inputRef.current?.focus();
   };
@@ -31,7 +32,14 @@ export default function PosView({ products, onCheckout }) {
     addProduct(products.find((product) => product.barcode === barcode.trim()));
   };
 
-  const quantity = (id, delta) => setCart((current) => current.map((item) => item.id === id ? { ...item, quantity: Math.max(1, Math.min(item.stock, item.quantity + delta)) } : item));
+  const quantity = (id, direction) => setCart((current) => current.map((item) => {
+    if (item.id !== id) return item;
+    const step = item.saleUnit === 'kg' ? 0.25 : 1;
+    const minimum = step;
+    return { ...item, quantity: Math.max(minimum, Math.min(item.stock, Number((item.quantity + direction * step).toFixed(3)))) };
+  }));
+
+  const setExactQuantity = (id, value) => setCart((current) => current.map((item) => item.id === id ? { ...item, quantity: Math.min(item.stock, Math.max(item.saleUnit === 'kg' ? 0.001 : 1, Number(value) || 0)) } : item));
 
   const confirm = async () => {
     if (!cart.length) return;
@@ -53,8 +61,8 @@ export default function PosView({ products, onCheckout }) {
           </form>
 
           <section className="panel overflow-hidden">
-            <div className="border-b border-black/5 p-5"><h2 className="text-lg font-black">Productos de la venta</h2><p className="text-sm text-black/40">{cart.reduce((sum, item) => sum + item.quantity, 0)} unidades</p></div>
-            {!cart.length ? <EmptyState text="Escanea un producto para comenzar la venta" /> : <div className="divide-y divide-black/5">{cart.map((item) => <div key={item.id} className="grid grid-cols-[1fr_auto] gap-4 p-5 sm:grid-cols-[1fr_auto_auto] sm:items-center"><div><p className="font-bold">{item.name}</p><p className="mt-1 text-xs text-black/40">{item.barcode} · {formatMoney(item.salePrice)} c/u</p></div><div className="flex items-center gap-2"><button className="grid size-8 place-items-center rounded-xl bg-cream" onClick={() => quantity(item.id, -1)}><Minus size={15} /></button><span className="w-7 text-center font-black">{item.quantity}</span><button className="grid size-8 place-items-center rounded-xl bg-cream" onClick={() => quantity(item.id, 1)}><Plus size={15} /></button></div><div className="flex items-center justify-end gap-3"><span className="min-w-20 text-right font-black">{formatMoney(item.salePrice * item.quantity)}</span><button className="text-coral" onClick={() => setCart(cart.filter((product) => product.id !== item.id))}><Trash2 size={18} /></button></div></div>)}</div>}
+            <div className="border-b border-black/5 p-5"><h2 className="text-lg font-black">Productos de la venta</h2><p className="text-sm text-black/40">{cart.length} productos agregados</p></div>
+            {!cart.length ? <EmptyState text="Escanea un producto para comenzar la venta" /> : <div className="divide-y divide-black/5">{cart.map((item) => <div key={item.id} className="grid grid-cols-[1fr_auto] gap-4 p-5 sm:grid-cols-[1fr_auto_auto] sm:items-center"><div><p className="font-bold">{item.name}</p><p className="mt-1 text-xs text-black/40">{item.barcode} · {formatMoney(item.salePrice)} por {item.saleUnit === 'kg' ? 'kg' : 'unidad'}</p></div><div className="flex items-center gap-2"><button className="grid size-8 place-items-center rounded-xl bg-cream" onClick={() => quantity(item.id, -1)}><Minus size={15} /></button><input aria-label={`Cantidad de ${item.name}`} className="w-16 rounded-xl border border-black/10 px-2 py-1.5 text-center font-black" type="number" min={item.saleUnit === 'kg' ? '0.001' : '1'} max={item.stock} step={item.saleUnit === 'kg' ? '0.001' : '1'} value={item.quantity} onChange={(event) => setExactQuantity(item.id, event.target.value)} /><button className="grid size-8 place-items-center rounded-xl bg-cream" onClick={() => quantity(item.id, 1)}><Plus size={15} /></button><span className="text-xs text-black/40">{item.saleUnit === 'kg' ? 'kg' : 'un.'}</span></div><div className="flex items-center justify-end gap-3"><span className="min-w-20 text-right font-black">{formatMoney(item.salePrice * item.quantity)}</span><button className="text-coral" onClick={() => setCart(cart.filter((product) => product.id !== item.id))}><Trash2 size={18} /></button></div></div>)}</div>}
           </section>
         </section>
 
