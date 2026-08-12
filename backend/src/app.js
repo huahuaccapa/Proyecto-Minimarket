@@ -11,7 +11,7 @@ export const app = express();
 app.disable('x-powered-by');
 app.use(helmet());
 app.use(cors({ origin: env.frontendUrl, credentials: true }));
-app.use(express.json({ limit: '1mb' }));
+app.use(express.json({ limit: '3mb' }));
 app.use(express.urlencoded({ extended: true }));
 if (env.nodeEnv !== 'test') app.use(morgan('dev'));
 
