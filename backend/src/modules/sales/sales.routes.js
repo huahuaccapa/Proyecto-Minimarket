@@ -21,9 +21,10 @@ router.post('/', (req, res) => {
     const product = store.products.find((candidate) => candidate.id === item.productId && candidate.active);
     const quantity = Number(item.quantity);
     if (!product) throw new HttpError(404, `Producto no encontrado: ${item.productId}`);
-    if (!Number.isInteger(quantity) || quantity <= 0) throw new HttpError(400, `Cantidad inválida para ${product.name}`);
+    if (!Number.isFinite(quantity) || quantity <= 0) throw new HttpError(400, `Cantidad inválida para ${product.name}`);
+    if (product.saleUnit === 'unidad' && !Number.isInteger(quantity)) throw new HttpError(400, `${product.name} solo se vende en unidades completas`);
     if (product.stock < quantity) throw new HttpError(409, `Stock insuficiente para ${product.name}`);
-    return { productId: product.id, barcode: product.barcode, name: product.name, quantity, unitPrice: product.salePrice, unitCost: product.purchasePrice, subtotal: Number((product.salePrice * quantity).toFixed(2)) };
+    return { productId: product.id, barcode: product.barcode, name: product.name, saleUnit: product.saleUnit, quantity, unitPrice: product.salePrice, unitCost: product.unitCost ?? product.purchasePrice, subtotal: Number((product.salePrice * quantity).toFixed(2)) };
   });
 
   const total = Number(detail.reduce((sum, item) => sum + item.subtotal, 0).toFixed(2));
@@ -33,7 +34,7 @@ router.post('/', (req, res) => {
 
   detail.forEach((item) => {
     const product = store.products.find((candidate) => candidate.id === item.productId);
-    product.stock -= item.quantity;
+    product.stock = Number((product.stock - item.quantity).toFixed(3));
     store.inventoryMovements.push({ id: randomUUID(), productId: product.id, productName: product.name, type: 'salida', quantity: item.quantity, reason: 'Venta', stockAfter: product.stock, date: new Date().toISOString() });
   });
 
