@@ -49,4 +49,6 @@ export const createId = () =>
   globalThis.crypto?.randomUUID?.() || `local-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
 export const formatQuantity = (value) =>
-  new Intl.NumberFormat('es-PE', { maximumFractionDigits: 3 }).format(Number(value || 0));
+  new Intl.NumberFormat('es-PE', {
+    maximumFractionDigits: 3,
+  }).format(Number(value || 0));
