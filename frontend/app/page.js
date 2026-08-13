@@ -16,6 +16,7 @@ import ExpensesView from '../views/ExpensesView';
 import ReportsView from '../views/ReportsView';
 import SettingsView from '../views/SettingsView';
 
+
 import { api } from '../lib/api';
 
 import {
@@ -433,11 +434,11 @@ export default function Home() {
     ),
 
     products: (
-      <ProductsView
-        products={products}
-        categories={categories}
-        brands={brands}
-        onSave={saveProduct}
+     <ProductsView
+    products={products}
+    categories={categories}
+    brands={brands}
+    onSave={saveProduct}
       />
     ),
 
@@ -456,11 +457,13 @@ export default function Home() {
     ),
 
     inventory: (
-      <InventoryView
-        products={products}
-        onAdjust={adjust}
-      />
-    ),
+  <InventoryView
+    products={products}
+    categories={categories}
+    brands={brands}
+    onAdjust={adjust}
+  />
+),
 
     purchases: (
       <PurchasesView
