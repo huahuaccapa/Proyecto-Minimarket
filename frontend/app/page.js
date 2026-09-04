@@ -7,6 +7,7 @@ import AppShell from '../components/AppShell';
 
 import DashboardView from '../views/DashboardView';
 import PosView from '../views/PosView';
+import CashView from '../views/CashView';
 import ProductsView from '../views/ProductsView';
 import CategoriesView from '../views/CategoriesView';
 import BrandsView from '../views/BrandsView';
@@ -15,7 +16,6 @@ import PurchasesView from '../views/PurchasesView';
 import ExpensesView from '../views/ExpensesView';
 import ReportsView from '../views/ReportsView';
 import SettingsView from '../views/SettingsView';
-
 
 import { api } from '../lib/api';
 
@@ -26,6 +26,7 @@ import {
   seedSales,
   seedExpenses,
   seedPurchases,
+  seedSuppliers,
   createId,
 } from '../data/mock';
 
@@ -46,6 +47,13 @@ const demoUsers = [
   },
 ];
 
+const normalizeText = (value = '') =>
+  value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
+
 export default function Home() {
   const [user, setUser] = useState(null);
   const [active, setActive] = useState('dashboard');
@@ -57,6 +65,8 @@ export default function Home() {
   const [sales, setSales] = useState(seedSales);
   const [expenses, setExpenses] = useState(seedExpenses);
   const [purchases, setPurchases] = useState(seedPurchases);
+  const [suppliers, setSuppliers] = useState(seedSuppliers);
+  const [cashMovements, setCashMovements] = useState([]);
 
   useEffect(() => {
     Promise.all([
@@ -66,6 +76,8 @@ export default function Home() {
       api.sales(),
       api.expenses(),
       api.purchases(),
+      api.suppliers(),
+      api.cash(),
     ])
       .then(
         ([
@@ -75,6 +87,8 @@ export default function Home() {
           saleData,
           expenseData,
           purchaseData,
+          supplierData,
+          cashData,
         ]) => {
           setProducts(productData.data);
           setCategories(categoryData.data);
@@ -82,6 +96,8 @@ export default function Home() {
           setSales(saleData.data);
           setExpenses(expenseData.data);
           setPurchases(purchaseData.data);
+          setSuppliers(supplierData.data);
+          setCashMovements(cashData.data.movements || []);
           setOnline(true);
         }
       )
@@ -151,17 +167,12 @@ export default function Home() {
     if (product.id) {
       setProducts((current) =>
         current.map((item) =>
-          item.id === product.id
-            ? product
-            : item
+          item.id === product.id ? product : item
         )
       );
 
       if (online) {
-        await api.updateProduct(
-          product.id,
-          product
-        );
+        await api.updateProduct(product.id, product);
       }
 
       return;
@@ -178,8 +189,7 @@ export default function Home() {
     ]);
 
     if (online) {
-      const response =
-        await api.createProduct(product);
+      const response = await api.createProduct(product);
 
       setProducts((current) =>
         current.map((item) =>
@@ -229,12 +239,6 @@ export default function Home() {
       active: true,
     };
 
-    /*
-     * Al guardar una categoría o marca, se actualiza
-     * inmediatamente su estado correspondiente.
-     * ProductsView recibe esos estados y muestra las
-     * nuevas opciones sin recargar la página.
-     */
     setter((current) => [
       localItem,
       ...current,
@@ -257,25 +261,82 @@ export default function Home() {
     let sale;
 
     if (online) {
-      const response =
-        await api.createSale(payload);
+      const response = await api.createSale(payload);
 
       sale = response.data;
 
-      const productData =
-        await api.products();
+      const productData = await api.products();
 
       setProducts(productData.data);
     } else {
-      const detail = payload.items.map(
-        (item) => ({
-          ...item,
-          product: products.find(
-            (product) =>
-              product.id === item.productId
+      const detailSource = payload.items.map((item) => ({
+        ...item,
+
+        product: products.find(
+          (product) =>
+            product.id === item.productId
+        ),
+      }));
+
+      const localDetail = detailSource.map((item) => {
+        const category = categories.find(
+          (categoryItem) =>
+            categoryItem.id === item.product.categoryId
+        );
+
+        const isBeverage =
+          normalizeText(category?.name) === 'bebidas';
+
+        const chilledSurcharge =
+          isBeverage && item.isChilled ? 1 : 0;
+
+        const unitPrice =
+          Number(item.product.salePrice) +
+          chilledSurcharge;
+
+        const unitCost = Number(
+          item.product.unitCost ??
+            item.product.purchasePrice ??
+            0
+        );
+
+        return {
+          productId: item.product.id,
+          barcode: item.product.barcode,
+          name: item.product.name,
+          saleUnit: item.product.saleUnit,
+          quantity: item.quantity,
+          baseUnitPrice: Number(item.product.salePrice),
+          isChilled: Boolean(item.isChilled),
+          chilledSurcharge,
+          unitPrice,
+          unitCost,
+          subtotal: Number(
+            (unitPrice * item.quantity).toFixed(2)
           ),
-        })
+        };
+      });
+
+      const total = Number(
+        localDetail
+          .reduce(
+            (sum, item) => sum + item.subtotal,
+            0
+          )
+          .toFixed(2)
       );
+
+      const cost = Number(
+        localDetail
+          .reduce(
+            (sum, item) =>
+              sum + item.unitCost * item.quantity,
+            0
+          )
+          .toFixed(2)
+      );
+
+      const received = Number(payload.received || 0);
 
       sale = {
         id: createId(),
@@ -286,31 +347,24 @@ export default function Home() {
 
         date: new Date().toISOString(),
 
-        total: detail.reduce(
-          (sum, item) =>
-            sum +
-            item.product.salePrice *
-              item.quantity,
+        total,
+
+        cost,
+
+        paymentMethod: 'Efectivo',
+
+        received,
+
+        change: Number(
+          Math.max(received - total, 0).toFixed(2)
+        ),
+
+        items: localDetail.reduce(
+          (sum, item) => sum + item.quantity,
           0
         ),
 
-        cost: detail.reduce(
-          (sum, item) =>
-            sum +
-            (item.product.unitCost ??
-              item.product.purchasePrice) *
-              item.quantity,
-          0
-        ),
-
-        paymentMethod:
-          payload.paymentMethod,
-
-        items: detail.reduce(
-          (sum, item) =>
-            sum + item.quantity,
-          0
-        ),
+        detail: localDetail,
       };
 
       setProducts((current) =>
@@ -326,9 +380,12 @@ export default function Home() {
 
           return {
             ...product,
-            stock:
-              product.stock -
-              sold.quantity,
+
+            stock: Number(
+              (
+                product.stock - sold.quantity
+              ).toFixed(3)
+            ),
           };
         })
       );
@@ -345,9 +402,7 @@ export default function Home() {
   const adjust = async (payload) => {
     setProducts((current) =>
       current.map((product) => {
-        if (
-          product.id !== payload.productId
-        ) {
+        if (product.id !== payload.productId) {
           return product;
         }
 
@@ -358,8 +413,7 @@ export default function Home() {
 
         return {
           ...product,
-          stock:
-            product.stock + movement,
+          stock: product.stock + movement,
         };
       })
     );
@@ -367,8 +421,7 @@ export default function Home() {
     if (online) {
       await api.adjustStock(payload);
 
-      const response =
-        await api.products();
+      const response = await api.products();
 
       setProducts(response.data);
     }
@@ -381,8 +434,7 @@ export default function Home() {
     };
 
     if (online) {
-      const response =
-        await api.createExpense(expense);
+      const response = await api.createExpense(expense);
 
       created = response.data;
     }
@@ -394,18 +446,27 @@ export default function Home() {
   };
 
   const savePurchase = async (purchase) => {
+    const supplier = suppliers.find(
+      (item) =>
+        item.id === purchase.supplierId
+    );
+
     let created = {
       ...purchase,
+
       id: createId(),
+
+      supplier: supplier?.businessName || '',
 
       number: `C-${String(
         purchases.length + 1
       ).padStart(4, '0')}`,
+
+      createdAt: new Date().toISOString(),
     };
 
     if (online) {
-      const response =
-        await api.createPurchase(purchase);
+      const response = await api.createPurchase(purchase);
 
       created = response.data;
     }
@@ -414,6 +475,77 @@ export default function Home() {
       created,
       ...current,
     ]);
+
+    return created;
+  };
+
+  const saveSupplier = async (supplier) => {
+    let saved = {
+      ...supplier,
+
+      id: supplier.id || createId(),
+
+      active: supplier.active ?? true,
+
+      createdAt:
+        supplier.createdAt ||
+        new Date().toISOString(),
+    };
+
+    if (online) {
+      const response = supplier.id
+        ? await api.updateSupplier(
+            supplier.id,
+            supplier
+          )
+        : await api.createSupplier(supplier);
+
+      saved = response.data;
+    }
+
+    setSuppliers((current) => {
+      const exists = current.some(
+        (item) => item.id === saved.id
+      );
+
+      if (exists) {
+        return current.map((item) =>
+          item.id === saved.id ? saved : item
+        );
+      }
+
+      return [
+        saved,
+        ...current,
+      ];
+    });
+
+    return saved;
+  };
+
+  const saveCashMovement = async (movement) => {
+    let created = {
+      ...movement,
+
+      id: createId(),
+
+      date: new Date().toISOString(),
+    };
+
+    if (online) {
+      const response = await api.createCashMovement(
+        movement
+      );
+
+      created = response.data;
+    }
+
+    setCashMovements((current) => [
+      ...current,
+      created,
+    ]);
+
+    return created;
   };
 
   const views = {
@@ -429,16 +561,25 @@ export default function Home() {
     pos: (
       <PosView
         products={products}
+        categories={categories}
         onCheckout={checkout}
       />
     ),
 
+    cash: (
+      <CashView
+        sales={sales}
+        cashMovements={cashMovements}
+        onSaveMovement={saveCashMovement}
+      />
+    ),
+
     products: (
-     <ProductsView
-    products={products}
-    categories={categories}
-    brands={brands}
-    onSave={saveProduct}
+      <ProductsView
+        products={products}
+        categories={categories}
+        brands={brands}
+        onSave={saveProduct}
       />
     ),
 
@@ -457,18 +598,20 @@ export default function Home() {
     ),
 
     inventory: (
-  <InventoryView
-    products={products}
-    categories={categories}
-    brands={brands}
-    onAdjust={adjust}
-  />
-),
+      <InventoryView
+        products={products}
+        categories={categories}
+        brands={brands}
+        onAdjust={adjust}
+      />
+    ),
 
     purchases: (
       <PurchasesView
         purchases={purchases}
-        onSave={savePurchase}
+        suppliers={suppliers}
+        onSavePurchase={savePurchase}
+        onSaveSupplier={saveSupplier}
       />
     ),
 
@@ -483,6 +626,7 @@ export default function Home() {
       <ReportsView
         sales={sales}
         expenses={expenses}
+        products={products}
       />
     ),
 
