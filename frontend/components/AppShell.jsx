@@ -18,11 +18,13 @@ import {
   Wifi,
   WifiOff,
   X,
+  CircleDollarSign,
 } from 'lucide-react';
 
 const items = [
   ['dashboard', 'Resumen', LayoutDashboard, ['Administrador']],
   ['pos', 'Caja y ventas', ScanBarcode, ['Administrador', 'Vendedora']],
+  ['cash', 'Caja actual', CircleDollarSign, ['Administrador']],
   ['products', 'Productos', Package, ['Administrador']],
   ['categories', 'Categorías', FolderTree, ['Administrador']],
   ['brands', 'Marcas', Tags, ['Administrador']],
@@ -135,9 +137,7 @@ export default function AppShell({
             <p className="text-xs font-bold text-black/35">
               Panel administrativo
             </p>
-            <p className="font-black">
-              Buenas tardes, {user.name}
-            </p>
+            <p className="font-black">Buenas tardes, {user.name}</p>
           </div>
 
           <div
@@ -152,9 +152,7 @@ export default function AppShell({
           </div>
         </header>
 
-        <main className="p-4 sm:p-8 lg:p-10">
-          {children}
-        </main>
+        <main className="p-4 sm:p-8 lg:p-10">{children}</main>
       </div>
     </div>
   );
