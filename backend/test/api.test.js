@@ -215,3 +215,142 @@ test('POST /api/inventory/adjust rechaza una salida sin stock', async () => {
     })
     .expect(409);
 });
+
+test(
+  'POST /api/sales suma S/ 1 por unidad cuando una bebida se vende helada',
+  async () => {
+    const product =
+      await request(app)
+        .get(
+          '/api/products/p2'
+        )
+        .expect(200);
+
+    const sale =
+      await request(app)
+        .post('/api/sales')
+        .send({
+          items: [
+            {
+              productId:
+                'p2',
+
+              quantity: 2,
+
+              isChilled:
+                true,
+            },
+          ],
+
+          paymentMethod:
+            'Efectivo',
+
+          received: 10,
+        })
+        .expect(201);
+
+    assert.equal(
+      sale.body.data.total,
+
+      (
+        product.body.data
+          .salePrice + 1
+      ) * 2
+    );
+
+    assert.equal(
+      sale.body.data
+        .detail[0]
+        .isChilled,
+      true
+    );
+
+    assert.equal(
+      sale.body.data
+        .detail[0]
+        .chilledSurcharge,
+      1
+    );
+
+    assert.equal(
+      sale.body.data
+        .detail[0]
+        .unitPrice,
+
+      product.body.data
+        .salePrice + 1
+    );
+  }
+);
+
+test(
+  'POST /api/sales mantiene el precio normal de una bebida si no se marca helada',
+  async () => {
+    const product =
+      await request(app)
+        .get(
+          '/api/products/p2'
+        )
+        .expect(200);
+
+    const sale =
+      await request(app)
+        .post('/api/sales')
+        .send({
+          items: [
+            {
+              productId:
+                'p2',
+
+              quantity: 1,
+
+              isChilled:
+                false,
+            },
+          ],
+
+          paymentMethod:
+            'Yape',
+        })
+        .expect(201);
+
+    assert.equal(
+      sale.body.data.total,
+
+      product.body.data
+        .salePrice
+    );
+
+    assert.equal(
+      sale.body.data
+        .detail[0]
+        .chilledSurcharge,
+      0
+    );
+  }
+);
+
+test(
+  'POST /api/sales rechaza el recargo helado para un producto que no es bebida',
+  async () => {
+    await request(app)
+      .post('/api/sales')
+      .send({
+        items: [
+          {
+            productId:
+              'p1',
+
+            quantity: 1,
+
+            isChilled:
+              true,
+          },
+        ],
+
+        paymentMethod:
+          'Yape',
+      })
+      .expect(400);
+  }
+);
