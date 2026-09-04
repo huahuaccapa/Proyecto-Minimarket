@@ -297,21 +297,112 @@ export const store = {
     },
   ],
 
-  purchases: [
-    {
-      id: 'c1',
-      number: 'C-0001',
-      date: '2026-08-06',
-      supplier: 'Distribuidora Arequipa',
-      total: 286.4,
-      document: 'factura-001.pdf',
-      items: 24,
-      createdAt: now,
-    },
-  ],
+  
+
+  suppliers: [
+  {
+    id: 'sup1',
+
+    businessName:
+      'Distribuidora Arequipa',
+
+    ruc:
+      '20400000001',
+
+    phone:
+      '054-400000',
+
+    email:
+      'ventas@distribuidoraarequipa.pe',
+
+    address:
+      'Arequipa, Perú',
+
+    notes:
+      'Proveedor principal de bebidas y abarrotes.',
+
+    active:
+      true,
+
+    representatives: [
+      {
+        id:
+          'rep1',
+
+        name:
+          'Carlos Mendoza',
+
+        position:
+          'Representante de ventas',
+
+        phone:
+          '987654321',
+
+        email:
+          'carlos.mendoza@distribuidoraarequipa.pe',
+
+        notes:
+          'Visita semanal.',
+      },
+    ],
+
+    createdAt:
+      now,
+  },
+],
+
+purchases: [
+  {
+    id:
+      'c1',
+
+    number:
+      'C-0001',
+
+    supplierId:
+      'sup1',
+
+    supplier:
+      'Distribuidora Arequipa',
+
+    documentType:
+      'Factura',
+
+    documentNumber:
+      'F001-000123',
+
+    date:
+      '2026-08-06',
+
+    total:
+      286.4,
+
+    items:
+      24,
+
+    currency:
+      'PEN',
+
+    notes:
+      'Compra semanal de mercadería.',
+
+    documentName:
+      'factura-001.jpg',
+
+    documentMimeType:
+      'image/jpeg',
+
+    documentDataUrl:
+      '',
+
+    createdAt:
+      now,
+  },
+],
 
   inventoryMovements: [],
 };
 
 export const nextNumber = (prefix, collection) =>
   `${prefix}-${String(collection.length + 1).padStart(4, '0')}`;
+
