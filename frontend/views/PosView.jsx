@@ -1,22 +1,28 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import {
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 import {
-  ScanBarcode,
-  Search,
-  Minus,
-  Plus,
-  Trash2,
-  Wallet,
+  AlertTriangle,
   Banknote,
   CheckCircle2,
+  LockKeyhole,
+  Minus,
+  Plus,
+  ScanBarcode,
+  Search,
   Snowflake,
+  Trash2,
+  Wallet,
 } from 'lucide-react';
 
 import {
-  PageTitle,
   EmptyState,
+  PageTitle,
 } from '../components/ui';
 
 import {
@@ -25,154 +31,252 @@ import {
 
 const CHILLED_SURCHARGE = 1;
 
-const normalizeText = (value = '') =>
-  value
+const normalizeText = (
+  value = '',
+) =>
+  String(value)
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
+    .replace(
+      /[\u0300-\u036f]/g,
+      '',
+    )
     .trim()
     .toLowerCase();
 
+function isExpired(
+  expirationDate,
+) {
+  if (!expirationDate) {
+    return false;
+  }
+
+  const expiration =
+    new Date(
+      `${expirationDate}T23:59:59`,
+    );
+
+  if (
+    Number.isNaN(
+      expiration.getTime(),
+    )
+  ) {
+    return false;
+  }
+
+  return (
+    expiration <
+    new Date()
+  );
+}
+
 export default function PosView({
-  products,
+  products = [],
   categories = [],
+  cash,
   onCheckout,
 }) {
-  const [barcode, setBarcode] =
-    useState('');
+  const [
+    barcode,
+    setBarcode,
+  ] = useState('');
 
-  const [cart, setCart] =
-    useState([]);
+  const [
+    cart,
+    setCart,
+  ] = useState([]);
 
-  /*
-   * Por ahora Caja únicamente acepta
-   * pagos en efectivo.
-   */
-  const paymentMethod =
-    'Efectivo';
+  const [
+    received,
+    setReceived,
+  ] = useState('');
 
-  const [received, setReceived] =
-    useState('');
+  const [
+    message,
+    setMessage,
+  ] = useState('');
 
-  const [message, setMessage] =
-    useState('');
+  const [
+    messageType,
+    setMessageType,
+  ] = useState('success');
+
+  const [
+    processing,
+    setProcessing,
+  ] = useState(false);
 
   const inputRef =
     useRef(null);
 
-  /*
-   * IDs pertenecientes a la categoría
-   * Bebidas.
-   */
+  const cashOpen =
+    Boolean(
+      cash?.isOpen,
+    );
+
   const beverageCategoryIds =
     useMemo(
       () =>
         new Set(
           categories
             .filter(
-              (category) =>
+              (
+                category,
+              ) =>
                 normalizeText(
-                  category.name
+                  category.name,
                 ) ===
-                'bebidas'
+                'bebidas',
             )
             .map(
-              (category) =>
-                category.id
-            )
+              (
+                category,
+              ) =>
+                category.id,
+            ),
         ),
-
-      [categories]
+      [categories],
     );
 
-  /*
-   * Determinar si un producto es bebida.
-   */
   const isBeverage = (
-    product
+    product,
   ) =>
     beverageCategoryIds.has(
-      product.categoryId
+      product.categoryId,
     );
 
-  /*
-   * Precio unitario final.
-   *
-   * Si la bebida es helada:
-   * precio normal + S/ 1.
-   */
   const unitPrice = (
-    item
+    item,
   ) =>
     Number(
-      item.salePrice
+      item.salePrice ||
+        0,
     ) +
     (item.isChilled
       ? CHILLED_SURCHARGE
       : 0);
 
-  /*
-   * Total de la venta.
-   */
   const total =
     useMemo(
       () =>
-        cart.reduce(
-          (
-            sum,
-            item
-          ) =>
-            sum +
-            unitPrice(
-              item
-            ) *
-              item.quantity,
-
-          0
+        Number(
+          cart
+            .reduce(
+              (
+                sum,
+                item,
+              ) =>
+                sum +
+                unitPrice(
+                  item,
+                ) *
+                  Number(
+                    item.quantity ||
+                      0,
+                  ),
+              0,
+            )
+            .toFixed(2),
         ),
-
-      [cart]
+      [cart],
     );
 
-  /*
-   * Dinero recibido.
-   */
   const receivedAmount =
     Number(
-      received || 0
+      received || 0,
     );
 
-  /*
-   * Vuelto.
-   */
   const change =
     Math.max(
-      receivedAmount -
-        total,
-
-      0
+      Number(
+        (
+          receivedAmount -
+          total
+        ).toFixed(2),
+      ),
+      0,
     );
 
-  /*
-   * AGREGAR PRODUCTO
-   */
-  const addProduct = (
-    product
+  const showMessage = (
+    text,
+    type = 'success',
+  ) => {
+    setMessage(text);
+
+    setMessageType(type);
+  };
+
+  const validateProduct = (
+    product,
   ) => {
     if (!product) {
-      setMessage(
-        'No encontramos ese código. Registra primero el producto.'
+      showMessage(
+        'No encontramos ese código. Registra primero el producto.',
+        'error',
+      );
+
+      return false;
+    }
+
+    if (
+      product.active ===
+      false
+    ) {
+      showMessage(
+        `${product.name} está desactivado.`,
+        'error',
+      );
+
+      return false;
+    }
+
+    if (
+      Number(
+        product.stock,
+      ) <= 0
+    ) {
+      showMessage(
+        `${product.name} no tiene stock disponible.`,
+        'error',
+      );
+
+      return false;
+    }
+
+    if (
+      isExpired(
+        product.expirationDate,
+      )
+    ) {
+      showMessage(
+        `${product.name} está vencido y no puede venderse.`,
+        'error',
+      );
+
+      return false;
+    }
+
+    return true;
+  };
+
+  const addProduct = (
+    product,
+  ) => {
+    if (
+      !cashOpen
+    ) {
+      showMessage(
+        'No puedes registrar ventas porque la caja está cerrada.',
+        'error',
       );
 
       return;
     }
 
     if (
-      product.stock <= 0
+      !validateProduct(
+        product,
+      )
     ) {
-      setMessage(
-        'Este producto no tiene stock disponible.'
-      );
-
       return;
     }
 
@@ -183,37 +287,58 @@ export default function PosView({
         : 1;
 
     setCart(
-      (current) => {
-        const exists =
+      (
+        current,
+      ) => {
+        const existing =
           current.find(
-            (item) =>
+            (
+              item,
+            ) =>
               item.id ===
-              product.id
+              product.id,
           );
 
-        if (exists) {
+        if (
+          existing
+        ) {
+          const next =
+            Number(
+              (
+                Number(
+                  existing.quantity,
+                ) +
+                step
+              ).toFixed(3),
+            );
+
+          if (
+            next >
+            Number(
+              product.stock,
+            )
+          ) {
+            showMessage(
+              `No hay más stock disponible de ${product.name}.`,
+              'error',
+            );
+
+            return current;
+          }
+
           return current.map(
-            (item) =>
+            (
+              item,
+            ) =>
               item.id ===
               product.id
                 ? {
                     ...item,
 
                     quantity:
-                      Math.min(
-                        Number(
-                          (
-                            item.quantity +
-                            step
-                          ).toFixed(
-                            3
-                          )
-                        ),
-
-                        item.stock
-                      ),
+                      next,
                   }
-                : item
+                : item,
           );
         }
 
@@ -226,60 +351,75 @@ export default function PosView({
             quantity:
               Math.min(
                 step,
-                product.stock
+                Number(
+                  product.stock,
+                ),
               ),
 
-            /*
-             * Toda bebida comienza
-             * inicialmente sin recargo.
-             */
             isChilled:
               false,
           },
         ];
-      }
+      },
     );
 
     setBarcode('');
 
-    setMessage(
-      `${product.name} agregado`
+    showMessage(
+      `${product.name} agregado a la venta.`,
     );
 
     inputRef.current?.focus();
   };
 
-  /*
-   * BUSCAR POR CÓDIGO
-   */
   const scan = (
-    event
+    event,
   ) => {
     event.preventDefault();
 
-    const product =
-      products.find(
-        (item) =>
-          item.barcode ===
-          barcode.trim()
+    const code =
+      barcode.trim();
+
+    if (!code) {
+      showMessage(
+        'Ingresa o escanea un código de barras.',
+        'error',
       );
 
-    addProduct(product);
+      return;
+    }
+
+    const product =
+      products.find(
+        (
+          item,
+        ) =>
+          String(
+            item.barcode,
+          ).trim() ===
+          code,
+      );
+
+    addProduct(
+      product,
+    );
   };
 
-  /*
-   * CAMBIAR CANTIDAD
-   */
-  const quantity = (
+  const changeQuantity = (
     id,
-    direction
-  ) =>
+    direction,
+  ) => {
     setCart(
-      (current) =>
+      (
+        current,
+      ) =>
         current.map(
-          (item) => {
+          (
+            item,
+          ) => {
             if (
-              item.id !== id
+              item.id !==
+              id
             ) {
               return item;
             }
@@ -293,83 +433,131 @@ export default function PosView({
             const minimum =
               step;
 
+            const candidate =
+              Number(
+                (
+                  Number(
+                    item.quantity,
+                  ) +
+                  direction *
+                    step
+                ).toFixed(
+                  3,
+                ),
+              );
+
+            const next =
+              Math.max(
+                minimum,
+                Math.min(
+                  Number(
+                    item.stock,
+                  ),
+                  candidate,
+                ),
+              );
+
             return {
               ...item,
 
               quantity:
-                Math.max(
-                  minimum,
-
-                  Math.min(
-                    item.stock,
-
-                    Number(
-                      (
-                        item.quantity +
-                        direction *
-                          step
-                      ).toFixed(
-                        3
-                      )
-                    )
-                  )
-                ),
+                next,
             };
-          }
-        )
+          },
+        ),
     );
+  };
 
-  /*
-   * ESCRIBIR CANTIDAD
-   */
   const setExactQuantity = (
     id,
-    value
-  ) =>
+    value,
+  ) => {
+    const numeric =
+      Number(value);
+
     setCart(
-      (current) =>
+      (
+        current,
+      ) =>
         current.map(
-          (item) =>
-            item.id === id
-              ? {
-                  ...item,
+          (
+            item,
+          ) => {
+            if (
+              item.id !==
+              id
+            ) {
+              return item;
+            }
 
-                  quantity:
-                    Math.min(
-                      item.stock,
+            const minimum =
+              item.saleUnit ===
+              'kg'
+                ? 0.001
+                : 1;
 
-                      Math.max(
-                        item.saleUnit ===
-                        'kg'
-                          ? 0.001
-                          : 1,
+            let next =
+              Number.isFinite(
+                numeric,
+              )
+                ? numeric
+                : minimum;
 
-                        Number(
-                          value
-                        ) ||
-                          0
-                      )
-                    ),
-                }
-              : item
-        )
+            if (
+              item.saleUnit !==
+                'kg' &&
+              !Number.isInteger(
+                next,
+              )
+            ) {
+              next =
+                Math.floor(
+                  next,
+                );
+            }
+
+            next =
+              Math.max(
+                minimum,
+                Math.min(
+                  Number(
+                    item.stock,
+                  ),
+                  next,
+                ),
+              );
+
+            return {
+              ...item,
+
+              quantity:
+                Number(
+                  next.toFixed(
+                    3,
+                  ),
+                ),
+            };
+          },
+        ),
     );
+  };
 
-  /*
-   * ACTIVAR / DESACTIVAR
-   * BEBIDA HELADA.
-   */
   const toggleChilled = (
-    id
+    id,
   ) => {
     setCart(
-      (current) =>
+      (
+        current,
+      ) =>
         current.map(
-          (item) => {
+          (
+            item,
+          ) => {
             if (
-              item.id !== id ||
+              item.id !==
+                id ||
               !isBeverage(
-                item
+                item,
               )
             ) {
               return item;
@@ -381,62 +569,100 @@ export default function PosView({
               isChilled:
                 !item.isChilled,
             };
-          }
-        )
+          },
+        ),
     );
   };
 
-  /*
-   * CONFIRMAR VENTA
-   */
+  const removeProduct = (
+    id,
+  ) => {
+    setCart(
+      (
+        current,
+      ) =>
+        current.filter(
+          (
+            item,
+          ) =>
+            item.id !==
+            id,
+        ),
+    );
+  };
+
   const confirm =
     async () => {
       if (
-        !cart.length
+        processing
       ) {
         return;
       }
 
-      /*
-       * Como solamente existe efectivo,
-       * siempre comprobamos el monto.
-       */
       if (
-        receivedAmount <
-        total
+        !cashOpen
       ) {
-        setMessage(
-          'El efectivo recibido es menor al total.'
+        showMessage(
+          'La caja está cerrada. Un administrador debe abrirla antes de registrar ventas.',
+          'error',
         );
 
         return;
       }
+
+      if (
+        !cart.length
+      ) {
+        showMessage(
+          'Agrega al menos un producto.',
+          'error',
+        );
+
+        return;
+      }
+
+      if (
+        !Number.isFinite(
+          receivedAmount,
+        ) ||
+        receivedAmount <
+          total
+      ) {
+        showMessage(
+          'El efectivo recibido es menor al total de la venta.',
+          'error',
+        );
+
+        return;
+      }
+
+      setProcessing(
+        true,
+      );
 
       try {
         const result =
           await onCheckout({
             items:
               cart.map(
-                ({
-                  id,
-                  quantity,
-                  isChilled,
-                }) => ({
+                (
+                  item,
+                ) => ({
                   productId:
-                    id,
+                    item.id,
 
-                  quantity,
+                  quantity:
+                    Number(
+                      item.quantity,
+                    ),
 
                   isChilled:
                     Boolean(
-                      isChilled
+                      item.isChilled,
                     ),
-                })
+                }),
               ),
 
-            /*
-             * Único método habilitado.
-             */
             paymentMethod:
               'Efectivo',
 
@@ -444,59 +670,136 @@ export default function PosView({
               receivedAmount,
           });
 
+        const saleNumber =
+          result?.number ||
+          '';
+
+        const saleChange =
+          result?.change ??
+          change;
+
         setCart([]);
 
         setReceived('');
 
-        setMessage(
-          `Venta ${
-            result?.number ||
-            ''
-          } registrada correctamente`
+        showMessage(
+          `Venta ${saleNumber} registrada. Vuelto: ${formatMoney(
+            saleChange,
+          )}`,
         );
 
         inputRef.current?.focus();
-      } catch (
-        error
-      ) {
-        setMessage(
+      } catch (error) {
+        showMessage(
           error.message ||
-            'No se pudo registrar la venta.'
+            'No se pudo registrar la venta.',
+          'error',
+        );
+      } finally {
+        setProcessing(
+          false,
         );
       }
     };
+
+  const quickProducts =
+    products
+      .filter(
+        (
+          product,
+        ) =>
+          product.active !==
+            false &&
+          Number(
+            product.stock,
+          ) > 0 &&
+          !isExpired(
+            product.expirationDate,
+          ),
+      )
+      .slice(
+        0,
+        6,
+      );
 
   return (
     <>
       <PageTitle
         eyebrow="Punto de venta"
         title="Caja rápida"
-        description="Escanea el código, revisa el pedido, recibe el efectivo y registra la venta."
+        description="Escanea productos, recibe el efectivo y registra la venta. Todo movimiento queda conectado con inventario y caja."
       />
 
+      {!cashOpen && (
+        <section className="mb-6 flex items-start gap-4 rounded-2xl border border-coral/20 bg-coral/10 p-5 text-coral">
+          <LockKeyhole
+            className="mt-0.5 shrink-0"
+            size={22}
+          />
+
+          <div>
+            <p className="font-black">
+              Caja cerrada
+            </p>
+
+            <p className="mt-1 text-sm font-semibold">
+              No se pueden
+              registrar ventas.
+              Un administrador
+              debe ingresar a
+              “Caja actual” y
+              realizar la
+              apertura.
+            </p>
+          </div>
+        </section>
+      )}
+
+      {cashOpen && (
+        <section className="mb-6 flex items-center justify-between gap-4 rounded-2xl bg-mint p-4">
+          <div>
+            <p className="text-xs font-black uppercase tracking-wide text-forest/60">
+              Caja abierta
+            </p>
+
+            <p className="font-black text-forest">
+              {cash.session
+                ?.number ||
+                'Sesión activa'}
+            </p>
+          </div>
+
+          <div className="text-right">
+            <p className="text-xs font-bold text-forest/60">
+              Efectivo
+              esperado
+            </p>
+
+            <strong className="text-lg text-forest">
+              {formatMoney(
+                cash.balance ||
+                  0,
+              )}
+            </strong>
+          </div>
+        </section>
+      )}
+
       <div className="grid gap-6 xl:grid-cols-[1fr_390px]">
-
-        {/* ================================= */}
-        {/* PRODUCTOS */}
-        {/* ================================= */}
-
         <section className="space-y-5">
-
-          {/* BUSCADOR */}
-
           <form
             className="panel p-5"
-            onSubmit={scan}
+            onSubmit={
+              scan
+            }
           >
             <label className="text-sm font-black">
-              Escanear código de
-              barras
+              Escanear código
+              de barras
             </label>
 
             <div className="mt-3 flex gap-3">
-
               <div className="relative flex-1">
-
                 <ScanBarcode className="absolute left-4 top-3.5 text-forest" />
 
                 <input
@@ -504,27 +807,32 @@ export default function PosView({
                     inputRef
                   }
                   autoFocus
-                  className="field pl-12 text-lg font-bold"
+                  disabled={
+                    !cashOpen
+                  }
+                  className="field pl-12 text-lg font-bold disabled:cursor-not-allowed disabled:opacity-50"
                   placeholder="Escanea o escribe el código"
                   value={
                     barcode
                   }
                   onChange={(
-                    event
+                    event,
                   ) =>
                     setBarcode(
                       event
                         .target
-                        .value
+                        .value,
                     )
                   }
                 />
-
               </div>
 
               <button
                 className="btn-primary"
                 type="submit"
+                disabled={
+                  !cashOpen
+                }
               >
                 <Search
                   size={18}
@@ -534,58 +842,79 @@ export default function PosView({
                   Buscar
                 </span>
               </button>
-
             </div>
 
             {message && (
-              <p className="mt-3 text-sm font-bold text-forest">
-                {message}
-              </p>
-            )}
-
-            <div className="mt-4 flex flex-wrap gap-2">
-
-              {products
-                .slice(
-                  0,
-                  4
-                )
-                .map(
-                  (product) => (
-                    <button
-                      key={
-                        product.id
-                      }
-                      type="button"
-                      className="rounded-full bg-cream px-3 py-2 text-xs font-bold hover:bg-mint"
-                      onClick={() =>
-                        addProduct(
-                          product
-                        )
-                      }
-                    >
-                      {
-                        product.name
-                      }
-                    </button>
-                  )
+              <div
+                className={`mt-4 flex items-start gap-2 rounded-xl p-3 text-sm font-bold ${
+                  messageType ===
+                  'error'
+                    ? 'bg-coral/10 text-coral'
+                    : 'bg-mint text-forest'
+                }`}
+              >
+                {messageType ===
+                'error' ? (
+                  <AlertTriangle
+                    className="mt-0.5 shrink-0"
+                    size={17}
+                  />
+                ) : (
+                  <CheckCircle2
+                    className="mt-0.5 shrink-0"
+                    size={17}
+                  />
                 )}
 
-            </div>
+                <span>
+                  {message}
+                </span>
+              </div>
+            )}
 
+            {quickProducts.length >
+              0 && (
+              <div className="mt-4">
+                <p className="mb-2 text-xs font-bold text-black/35">
+                  Acceso rápido
+                </p>
+
+                <div className="flex flex-wrap gap-2">
+                  {quickProducts.map(
+                    (
+                      product,
+                    ) => (
+                      <button
+                        key={
+                          product.id
+                        }
+                        type="button"
+                        disabled={
+                          !cashOpen
+                        }
+                        className="rounded-full bg-cream px-3 py-2 text-xs font-bold transition hover:bg-mint disabled:opacity-40"
+                        onClick={() =>
+                          addProduct(
+                            product,
+                          )
+                        }
+                      >
+                        {
+                          product.name
+                        }
+                      </button>
+                    ),
+                  )}
+                </div>
+              </div>
+            )}
           </form>
 
-          {/* ================================= */}
-          {/* CARRITO */}
-          {/* ================================= */}
-
           <section className="panel overflow-hidden">
-
             <div className="border-b border-black/5 p-5">
-
               <h2 className="text-lg font-black">
-                Productos de la
-                venta
+                Productos de
+                la venta
               </h2>
 
               <p className="text-sm text-black/40">
@@ -593,29 +922,25 @@ export default function PosView({
                   cart.length
                 }{' '}
                 productos
-                agregados
+                diferentes
               </p>
-
             </div>
 
             {!cart.length ? (
               <EmptyState text="Escanea un producto para comenzar la venta" />
             ) : (
               <div className="divide-y divide-black/5">
-
                 {cart.map(
-                  (item) => (
+                  (
+                    item,
+                  ) => (
                     <div
                       key={
                         item.id
                       }
                       className="grid grid-cols-[1fr_auto] gap-4 p-5 sm:grid-cols-[1fr_auto_auto] sm:items-center"
                     >
-
-                      {/* PRODUCTO */}
-
                       <div>
-
                         <p className="font-bold">
                           {
                             item.name
@@ -625,91 +950,72 @@ export default function PosView({
                         <p className="mt-1 text-xs text-black/40">
                           {
                             item.barcode
-                          }
-                          {' · '}
-
+                          }{' '}
+                          ·{' '}
                           {formatMoney(
-                            item.salePrice
-                          )}
-
-                          {' por '}
-
+                            item.salePrice,
+                          )}{' '}
+                          por{' '}
                           {item.saleUnit ===
                           'kg'
                             ? 'kg'
                             : 'unidad'}
                         </p>
 
-                        {/* BEBIDA HELADA */}
+                        <p className="mt-1 text-xs font-bold text-black/35">
+                          Stock
+                          disponible:{' '}
+                          {
+                            item.stock
+                          }
+                        </p>
 
                         {isBeverage(
-                          item
+                          item,
                         ) && (
                           <button
                             type="button"
                             onClick={() =>
                               toggleChilled(
-                                item.id
+                                item.id,
                               )
                             }
-                            className={`
-                              mt-3
-                              inline-flex
-                              items-center
-                              gap-2
-                              rounded-xl
-                              border
-                              px-3
-                              py-2
-                              text-xs
-                              font-black
-                              transition
-
-                              ${
-                                item.isChilled
-                                  ? 'border-sky-300 bg-sky-100 text-sky-800'
-                                  : 'border-black/10 bg-white text-black/60 hover:border-sky-200 hover:bg-sky-50'
-                              }
-                            `}
+                            className={`mt-3 inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-black transition ${
+                              item.isChilled
+                                ? 'border-sky-300 bg-sky-100 text-sky-800'
+                                : 'border-black/10 bg-white text-black/60 hover:border-sky-200 hover:bg-sky-50'
+                            }`}
                           >
                             <Snowflake
-                              size={
-                                15
-                              }
+                              size={15}
                             />
 
                             {item.isChilled
-                              ? `Helada activada · ${formatMoney(
+                              ? `Helada · ${formatMoney(
                                   unitPrice(
-                                    item
-                                  )
+                                    item,
+                                  ),
                                 )}`
                               : `Helada + ${formatMoney(
-                                  CHILLED_SURCHARGE
+                                  CHILLED_SURCHARGE,
                                 )}`}
                           </button>
                         )}
-
                       </div>
 
-                      {/* CANTIDAD */}
-
                       <div className="flex items-center gap-2">
-
                         <button
                           type="button"
                           className="grid size-8 place-items-center rounded-xl bg-cream"
                           onClick={() =>
-                            quantity(
+                            changeQuantity(
                               item.id,
-                              -1
+                              -1,
                             )
                           }
                         >
                           <Minus
-                            size={
-                              15
-                            }
+                            size={15}
                           />
                         </button>
 
@@ -736,13 +1042,13 @@ export default function PosView({
                             item.quantity
                           }
                           onChange={(
-                            event
+                            event,
                           ) =>
                             setExactQuantity(
                               item.id,
                               event
                                 .target
-                                .value
+                                .value,
                             )
                           }
                         />
@@ -751,16 +1057,14 @@ export default function PosView({
                           type="button"
                           className="grid size-8 place-items-center rounded-xl bg-cream"
                           onClick={() =>
-                            quantity(
+                            changeQuantity(
                               item.id,
-                              1
+                              1,
                             )
                           }
                         >
                           <Plus
-                            size={
-                              15
-                            }
+                            size={15}
                           />
                         </button>
 
@@ -770,146 +1074,106 @@ export default function PosView({
                             ? 'kg'
                             : 'un.'}
                         </span>
-
                       </div>
 
-                      {/* SUBTOTAL */}
-
                       <div className="flex items-center justify-end gap-3">
-
                         <div className="min-w-24 text-right">
-
                           <span className="font-black">
                             {formatMoney(
                               unitPrice(
-                                item
+                                item,
                               ) *
-                                item.quantity
+                                item.quantity,
                             )}
                           </span>
 
                           {item.isChilled && (
                             <p className="mt-1 text-[11px] font-bold text-sky-700">
                               Incluye
-                              recargo por
-                              helada
+                              recargo
                             </p>
                           )}
-
                         </div>
 
                         <button
                           type="button"
                           className="text-coral"
                           onClick={() =>
-                            setCart(
-                              (
-                                current
-                              ) =>
-                                current.filter(
-                                  (
-                                    product
-                                  ) =>
-                                    product.id !==
-                                    item.id
-                                )
+                            removeProduct(
+                              item.id,
                             )
                           }
+                          aria-label={`Eliminar ${item.name}`}
                         >
                           <Trash2
-                            size={
-                              18
-                            }
+                            size={18}
                           />
                         </button>
-
                       </div>
-
                     </div>
-                  )
+                  ),
                 )}
-
               </div>
             )}
-
           </section>
-
         </section>
 
-        {/* ================================= */}
-        {/* COBRO */}
-        {/* ================================= */}
-
         <aside className="panel h-fit overflow-hidden xl:sticky xl:top-28">
-
           <div className="bg-ink p-6 text-white">
-
             <div className="flex items-center gap-2 text-white/50">
-
               <Wallet
                 size={18}
               />
 
               <span className="text-sm font-bold">
-                Total a cobrar
+                Total a
+                cobrar
               </span>
-
             </div>
 
             <p className="mt-2 text-5xl font-black tracking-tight">
               {formatMoney(
-                total
+                total,
               )}
             </p>
-
           </div>
 
           <div className="p-6">
-
-            {/* MÉTODO DE PAGO */}
-
             <p className="text-sm font-black">
               Método de pago
             </p>
 
-            <div className="mt-3">
+            <div className="mt-3 flex items-center gap-3 rounded-2xl border border-forest bg-mint p-4 text-forest">
+              <span className="grid size-11 place-items-center rounded-xl bg-white/70">
+                <Banknote
+                  size={22}
+                />
+              </span>
 
-              <div className="flex items-center gap-3 rounded-2xl border border-forest bg-mint p-4 text-forest">
+              <div>
+                <p className="font-black">
+                  Efectivo
+                </p>
 
-                <span className="grid size-11 place-items-center rounded-xl bg-white/70">
-
-                  <Banknote
-                    size={22}
-                  />
-
-                </span>
-
-                <div>
-
-                  <p className="font-black">
-                    Efectivo
-                  </p>
-
-                  <p className="text-xs font-bold opacity-60">
-                    Único método
-                    disponible por
-                    ahora
-                  </p>
-
-                </div>
-
+                <p className="text-xs font-bold opacity-60">
+                  Único método
+                  disponible
+                  actualmente
+                </p>
               </div>
-
             </div>
 
-            {/* EFECTIVO RECIBIDO */}
-
             <label className="mt-5 block text-sm font-black">
-              Efectivo recibido
+              Efectivo
+              recibido
             </label>
 
             <input
-              className="field mt-2 text-lg font-black"
+              disabled={
+                !cashOpen ||
+                !cart.length
+              }
+              className="field mt-2 text-lg font-black disabled:cursor-not-allowed disabled:opacity-50"
               inputMode="decimal"
               type="number"
               min="0"
@@ -919,72 +1183,67 @@ export default function PosView({
                 received
               }
               onChange={(
-                event
+                event,
               ) =>
                 setReceived(
-                  event.target
-                    .value
+                  event
+                    .target
+                    .value,
                 )
               }
             />
 
-            {/* ATAJOS DE EFECTIVO */}
-
-            {total > 0 && (
-              <div className="mt-3 flex flex-wrap gap-2">
-
-                {[
-                  10,
-                  20,
-                  50,
-                  100,
-                ].map(
-                  (amount) => (
-                    <button
-                      key={
-                        amount
-                      }
-                      type="button"
-                      className="rounded-xl bg-cream px-3 py-2 text-xs font-black hover:bg-mint"
-                      onClick={() =>
-                        setReceived(
-                          String(
-                            amount
+            {total > 0 &&
+              cashOpen && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {[
+                    10,
+                    20,
+                    50,
+                    100,
+                    200,
+                  ].map(
+                    (
+                      amount,
+                    ) => (
+                      <button
+                        key={
+                          amount
+                        }
+                        type="button"
+                        className="rounded-xl bg-cream px-3 py-2 text-xs font-black hover:bg-mint"
+                        onClick={() =>
+                          setReceived(
+                            String(
+                              amount,
+                            ),
                           )
-                        )
-                      }
-                    >
-                      S/{' '}
-                      {
-                        amount
-                      }
-                    </button>
-                  )
-                )}
+                        }
+                      >
+                        S/{' '}
+                        {amount}
+                      </button>
+                    ),
+                  )}
 
-                <button
-                  type="button"
-                  className="rounded-xl bg-cream px-3 py-2 text-xs font-black hover:bg-mint"
-                  onClick={() =>
-                    setReceived(
-                      total.toFixed(
-                        2
+                  <button
+                    type="button"
+                    className="rounded-xl bg-cream px-3 py-2 text-xs font-black hover:bg-mint"
+                    onClick={() =>
+                      setReceived(
+                        total.toFixed(
+                          2,
+                        ),
                       )
-                    )
-                  }
-                >
-                  Exacto
-                </button>
-
-              </div>
-            )}
-
-            {/* VUELTO */}
+                    }
+                  >
+                    Exacto
+                  </button>
+                </div>
+              )}
 
             <div className="mt-4 rounded-2xl bg-cream p-4">
-
               <div className="flex items-center justify-between">
-
                 <span className="text-sm text-black/50">
                   Efectivo
                   recibido
@@ -992,31 +1251,25 @@ export default function PosView({
 
                 <strong>
                   {formatMoney(
-                    receivedAmount
+                    receivedAmount,
                   )}
                 </strong>
-
               </div>
 
               <div className="my-3 border-t border-black/5" />
 
               <div className="flex items-center justify-between">
-
                 <span className="font-black">
                   Vuelto
                 </span>
 
                 <strong className="text-xl text-forest">
                   {formatMoney(
-                    change
+                    change,
                   )}
                 </strong>
-
               </div>
-
             </div>
-
-            {/* ADVERTENCIA */}
 
             {cart.length >
               0 &&
@@ -1026,19 +1279,19 @@ export default function PosView({
                   Falta{' '}
                   {formatMoney(
                     total -
-                      receivedAmount
+                      receivedAmount,
                   )}{' '}
                   para completar
                   el pago.
                 </p>
               )}
 
-            {/* CONFIRMAR */}
-
             <button
               type="button"
               className="btn-primary mt-6 w-full py-4"
               disabled={
+                processing ||
+                !cashOpen ||
                 !cart.length ||
                 receivedAmount <
                   total
@@ -1051,13 +1304,20 @@ export default function PosView({
                 size={20}
               />
 
-              Confirmar venta
+              {processing
+                ? 'Registrando...'
+                : 'Confirmar venta'}
             </button>
 
+            {!cashOpen && (
+              <p className="mt-3 text-center text-xs font-bold text-coral">
+                Debes abrir la
+                caja antes de
+                vender.
+              </p>
+            )}
           </div>
-
         </aside>
-
       </div>
     </>
   );
