@@ -1,12 +1,36 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { createHash } from 'node:crypto';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const DATA_DIR = path.resolve(__dirname, '../../data');
+const DATA_FILE = path.join(DATA_DIR, 'db.json');
+
 const now = new Date().toISOString();
 
-export const store = {
+const hashPassword = (value) =>
+  createHash('sha256')
+    .update(String(value))
+    .digest('hex');
+
+const initialStore = () => ({
+  meta: {
+    sequences: {
+      sale: 0,
+      purchase: 0,
+      cashSession: 0,
+    },
+    version: 2,
+  },
+
   users: [
     {
       id: 'u1',
       username: 'admin',
       name: 'Administrador',
-      password: '123',
+      passwordHash: hashPassword('123'),
       role: 'Administrador',
       active: true,
     },
@@ -14,7 +38,7 @@ export const store = {
       id: 'u2',
       username: 'aydee',
       name: 'Aydee',
-      password: '123',
+      passwordHash: hashPassword('123'),
       role: 'Vendedora',
       active: true,
     },
@@ -114,6 +138,9 @@ export const store = {
       minStock: 8,
       saleUnit: 'unidad',
       image: '',
+      expirationDate: '',
+      sanitaryRegistration: '',
+      lot: '',
       active: true,
       createdAt: now,
     },
@@ -130,279 +157,160 @@ export const store = {
       purchaseQuantity: 3,
       unitCost: 2.2,
       salePrice: 3,
-      stock: 34,
+      stock: 36,
       minStock: 10,
       saleUnit: 'unidad',
       image: '',
-      active: true,
-      createdAt: now,
-    },
-    {
-      id: 'p3',
-      barcode: '7751271000159',
-      name: 'Arroz Costeño 1 kg',
-      description: 'Arroz extra en bolsa de 1 kg',
-      categoryId: 'cat1',
-      brandId: 'brand3',
-      purchasePresentation: 'unidad',
-      purchasePrice: 4.1,
-      contentQuantity: 1,
-      purchaseQuantity: 7,
-      unitCost: 4.1,
-      salePrice: 5.2,
-      stock: 7,
-      minStock: 10,
-      saleUnit: 'unidad',
-      image: '',
-      active: true,
-      createdAt: now,
-    },
-    {
-      id: 'p4',
-      barcode: '7750168000108',
-      name: 'Aceite Primor 900 ml',
-      description: 'Aceite vegetal',
-      categoryId: 'cat1',
-      brandId: 'brand4',
-      purchasePresentation: 'unidad',
-      purchasePrice: 8.1,
-      contentQuantity: 1,
-      purchaseQuantity: 5,
-      unitCost: 8.1,
-      salePrice: 9.8,
-      stock: 5,
-      minStock: 6,
-      saleUnit: 'unidad',
-      image: '',
-      active: true,
-      createdAt: now,
-    },
-    {
-      id: 'p5',
-      barcode: '7750106000252',
-      name: 'Galleta Soda Field',
-      description: 'Paquete individual',
-      categoryId: 'cat1',
-      brandId: '',
-      purchasePresentation: 'paquete',
-      purchasePrice: 9.6,
-      contentQuantity: 12,
-      purchaseQuantity: 4,
-      unitCost: 0.8,
-      salePrice: 1.2,
-      stock: 42,
-      minStock: 12,
-      saleUnit: 'unidad',
-      image: '',
-      active: true,
-      createdAt: now,
-    },
-    {
-      id: 'p6',
-      barcode: '7750463001837',
-      name: 'Detergente Bolívar 500 g',
-      description: 'Detergente en bolsa',
-      categoryId: 'cat4',
-      brandId: 'brand5',
-      purchasePresentation: 'unidad',
-      purchasePrice: 4.5,
-      contentQuantity: 1,
-      purchaseQuantity: 18,
-      unitCost: 4.5,
-      salePrice: 5.8,
-      stock: 18,
-      minStock: 5,
-      saleUnit: 'unidad',
-      image: '',
-      active: true,
-      createdAt: now,
-    },
-    {
-      id: 'p7',
-      barcode: '2000000000015',
-      name: 'Comida para perro a granel',
-      description: 'Alimento balanceado vendido por kilogramo',
-      categoryId: 'cat5',
-      brandId: '',
-      purchasePresentation: 'saco',
-      purchasePrice: 60,
-      contentQuantity: 15,
-      purchaseQuantity: 1,
-      unitCost: 4,
-      salePrice: 5.2,
-      stock: 15,
-      minStock: 3,
-      saleUnit: 'kg',
-      image: '',
+      expirationDate: '',
+      sanitaryRegistration: '',
+      lot: '',
       active: true,
       createdAt: now,
     },
   ],
-
-  sales: [
-    {
-      id: 'v1',
-      number: 'V-0001',
-      date: '2026-08-08T09:10:00.000Z',
-      total: 16.8,
-      cost: 12.2,
-      paymentMethod: 'Efectivo',
-      received: 20,
-      change: 3.2,
-      items: 4,
-      detail: [],
-    },
-    {
-      id: 'v2',
-      number: 'V-0002',
-      date: '2026-08-08T10:32:00.000Z',
-      total: 24.4,
-      cost: 18.1,
-      paymentMethod: 'Yape',
-      received: 24.4,
-      change: 0,
-      items: 6,
-      detail: [],
-    },
-    {
-      id: 'v3',
-      number: 'V-0003',
-      date: '2026-08-08T12:05:00.000Z',
-      total: 9.8,
-      cost: 8.1,
-      paymentMethod: 'Efectivo',
-      received: 10,
-      change: 0.2,
-      items: 1,
-      detail: [],
-    },
-  ],
-
-  expenses: [
-    {
-      id: 'g1',
-      date: '2026-08-08',
-      description: 'Transporte de mercadería',
-      category: 'Transporte',
-      amount: 12,
-      createdAt: now,
-    },
-    {
-      id: 'g2',
-      date: '2026-08-07',
-      description: 'Bolsas para despacho',
-      category: 'Insumos',
-      amount: 8.5,
-      createdAt: now,
-    },
-  ],
-
-  
 
   suppliers: [
-  {
-    id: 'sup1',
+    {
+      id: 'sup1',
+      businessName: 'Distribuidora Arequipa',
+      ruc: '20400000001',
+      phone: '054-400000',
+      email: 'ventas@distribuidoraarequipa.pe',
+      address: 'Arequipa, Perú',
+      notes: 'Proveedor principal.',
+      active: true,
+      representatives: [],
+      createdAt: now,
+    },
+  ],
 
-    businessName:
-      'Distribuidora Arequipa',
-
-    ruc:
-      '20400000001',
-
-    phone:
-      '054-400000',
-
-    email:
-      'ventas@distribuidoraarequipa.pe',
-
-    address:
-      'Arequipa, Perú',
-
-    notes:
-      'Proveedor principal de bebidas y abarrotes.',
-
-    active:
-      true,
-
-    representatives: [
-      {
-        id:
-          'rep1',
-
-        name:
-          'Carlos Mendoza',
-
-        position:
-          'Representante de ventas',
-
-        phone:
-          '987654321',
-
-        email:
-          'carlos.mendoza@distribuidoraarequipa.pe',
-
-        notes:
-          'Visita semanal.',
-      },
-    ],
-
-    createdAt:
-      now,
-  },
-],
-
-purchases: [
-  {
-    id:
-      'c1',
-
-    number:
-      'C-0001',
-
-    supplierId:
-      'sup1',
-
-    supplier:
-      'Distribuidora Arequipa',
-
-    documentType:
-      'Factura',
-
-    documentNumber:
-      'F001-000123',
-
-    date:
-      '2026-08-06',
-
-    total:
-      286.4,
-
-    items:
-      24,
-
-    currency:
-      'PEN',
-
-    notes:
-      'Compra semanal de mercadería.',
-
-    documentName:
-      'factura-001.jpg',
-
-    documentMimeType:
-      'image/jpeg',
-
-    documentDataUrl:
-      '',
-
-    createdAt:
-      now,
-  },
-],
-
+  sales: [],
+  purchases: [],
+  expenses: [],
   inventoryMovements: [],
+  cashMovements: [],
+  cashSessions: [],
+});
+
+function migrate(data) {
+  const base = initialStore();
+
+  const merged = {
+    ...base,
+    ...data,
+  };
+
+  for (const key of [
+    'users',
+    'categories',
+    'brands',
+    'products',
+    'suppliers',
+    'sales',
+    'purchases',
+    'expenses',
+    'inventoryMovements',
+    'cashMovements',
+    'cashSessions',
+  ]) {
+    if (!Array.isArray(merged[key])) {
+      merged[key] = [];
+    }
+  }
+
+  merged.meta = {
+    ...base.meta,
+    ...(data.meta || {}),
+  };
+
+  merged.meta.sequences = {
+    ...base.meta.sequences,
+    ...(data.meta?.sequences || {}),
+  };
+
+  merged.users = merged.users.map((user) => ({
+    ...user,
+    passwordHash:
+      user.passwordHash ||
+      hashPassword(user.password || '123'),
+    password: undefined,
+  }));
+
+  return merged;
+}
+
+function loadStore() {
+  fs.mkdirSync(DATA_DIR, {
+    recursive: true,
+  });
+
+  if (!fs.existsSync(DATA_FILE)) {
+    const fresh = initialStore();
+
+    fs.writeFileSync(
+      DATA_FILE,
+      JSON.stringify(fresh, null, 2),
+    );
+
+    return fresh;
+  }
+
+  try {
+    return migrate(
+      JSON.parse(
+        fs.readFileSync(DATA_FILE, 'utf8'),
+      ),
+    );
+  } catch {
+    const backup = `${DATA_FILE}.corrupt-${Date.now()}`;
+
+    fs.copyFileSync(
+      DATA_FILE,
+      backup,
+    );
+
+    const fresh = initialStore();
+
+    fs.writeFileSync(
+      DATA_FILE,
+      JSON.stringify(fresh, null, 2),
+    );
+
+    return fresh;
+  }
+}
+
+export const store = loadStore();
+
+export function persistStore() {
+  fs.mkdirSync(DATA_DIR, {
+    recursive: true,
+  });
+
+  const temp = `${DATA_FILE}.tmp`;
+
+  fs.writeFileSync(
+    temp,
+    JSON.stringify(store, null, 2),
+  );
+
+  fs.renameSync(
+    temp,
+    DATA_FILE,
+  );
+}
+
+export function nextNumber(type, prefix) {
+  store.meta.sequences[type] =
+    Number(store.meta.sequences[type] || 0) + 1;
+
+  persistStore();
+
+  return `${prefix}-${String(
+    store.meta.sequences[type],
+  ).padStart(4, '0')}`;
+}
+
+export {
+  hashPassword,
 };
-
-export const nextNumber = (prefix, collection) =>
-  `${prefix}-${String(collection.length + 1).padStart(4, '0')}`;
-
