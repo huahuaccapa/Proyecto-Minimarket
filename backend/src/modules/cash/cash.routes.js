@@ -1,168 +1,180 @@
-import { Router } from 'express';
-import { randomUUID } from 'node:crypto';
+import { Router } from "express";
 
-import { store } from '../../data/store.js';
+import { randomUUID } from "node:crypto";
+
+import { nextNumber, persistStore, store } from "../../data/store.js";
+
+import { requireRole } from "../../middlewares/auth.js";
 
 import {
-  HttpError,
-  required,
-  response,
-} from '../../utils/http.js';
+  addCashMovement,
+  calculateSessionExpected,
+  getOpenCashSession,
+  roundMoney,
+  sessionMovements,
+} from "../../services/business.js";
+
+import { HttpError, required, response } from "../../utils/http.js";
 
 const router = Router();
 
-const getCashSummary = () => {
-  const cashSales = Number(
-    store.sales
-      .filter(
-        (sale) =>
-          sale.paymentMethod === 'Efectivo'
-      )
-      .reduce(
-        (sum, sale) =>
-          sum + Number(sale.total || 0),
-        0
-      )
-      .toFixed(2)
-  );
+function cashSummary() {
+  const session = getOpenCashSession();
 
-  const manualIncome = Number(
-    store.cashMovements
-      .filter(
-        (movement) =>
-          movement.type === 'entrada'
-      )
-      .reduce(
-        (sum, movement) =>
-          sum + Number(movement.amount || 0),
-        0
-      )
-      .toFixed(2)
-  );
+  if (!session) {
+    return {
+      isOpen: false,
 
-  const withdrawals = Number(
-    store.cashMovements
-      .filter(
-        (movement) =>
-          movement.type === 'retiro'
-      )
-      .reduce(
-        (sum, movement) =>
-          sum + Number(movement.amount || 0),
-        0
-      )
-      .toFixed(2)
-  );
+      session: null,
 
-  const balance = Number(
-    (
-      cashSales +
-      manualIncome -
-      withdrawals
-    ).toFixed(2)
-  );
+      openingAmount: 0,
+
+      inflow: 0,
+
+      outflow: 0,
+
+      balance: 0,
+
+      movements: [],
+    };
+  }
+
+  const totals = calculateSessionExpected(session);
 
   return {
-    cashSales,
-    manualIncome,
-    withdrawals,
-    balance,
-    movements: store.cashMovements,
+    isOpen: true,
+
+    session,
+
+    openingAmount: session.openingAmount,
+
+    inflow: totals.inflow,
+
+    outflow: totals.outflow,
+
+    balance: totals.expected,
+
+    movements: [...sessionMovements(session.id)].reverse(),
   };
-};
+}
 
-router.get('/', (req, res) => {
-  response(
-    res,
-    getCashSummary()
-  );
-});
+router.get("/", (req, res) => response(res, cashSummary()));
 
-router.post('/movements', (req, res) => {
-  required(
-    req.body,
-    [
-      'type',
-      'amount',
-      'reason',
-    ]
-  );
-
-  if (
-    ![
-      'entrada',
-      'retiro',
-    ].includes(req.body.type)
-  ) {
-    throw new HttpError(
-      400,
-      'Tipo de movimiento de caja inválido'
-    );
+router.post("/open", requireRole("Administrador"), (req, res) => {
+  if (getOpenCashSession()) {
+    throw new HttpError(409, "Ya existe una caja abierta");
   }
 
-  const amount = Number(req.body.amount);
+  const openingAmount = roundMoney(req.body.openingAmount || 0);
 
-  if (
-    !Number.isFinite(amount) ||
-    amount <= 0
-  ) {
-    throw new HttpError(
-      400,
-      'El monto debe ser mayor que cero'
-    );
+  if (!Number.isFinite(openingAmount) || openingAmount < 0) {
+    throw new HttpError(400, "El fondo inicial no es válido");
   }
 
-  if (
-    req.body.type === 'retiro'
-  ) {
-    const current = getCashSummary();
-
-    if (
-      amount > current.balance
-    ) {
-      throw new HttpError(
-        409,
-        'No hay suficiente efectivo en caja para realizar este retiro'
-      );
-    }
-  }
-
-  const movement = {
+  const session = {
     id: randomUUID(),
 
-    type: req.body.type,
+    number: nextNumber("cashSession", "CAJ"),
 
-    amount: Number(
-      amount.toFixed(2)
-    ),
+    status: "open",
 
-    reason: String(
-      req.body.reason || ''
-    ).trim(),
+    openingAmount,
 
-    notes: String(
-      req.body.notes || ''
-    ).trim(),
+    openedAt: new Date().toISOString(),
 
-    date: new Date().toISOString(),
+    openedBy: req.user.id,
+
+    closingAmount: null,
+
+    expectedAmount: null,
+
+    difference: null,
+
+    closedAt: null,
+
+    closedBy: null,
   };
 
-  store.cashMovements.push(
-    movement
-  );
+  store.cashSessions.push(session);
+
+  persistStore();
+
+  response(res, cashSummary(), "Caja abierta", 201);
+});
+
+router.post("/close", requireRole("Administrador"), (req, res) => {
+  required(req.body, ["closingAmount"]);
+
+  const session = getOpenCashSession();
+
+  if (!session) {
+    throw new HttpError(409, "No hay una caja abierta");
+  }
+
+  const closingAmount = roundMoney(req.body.closingAmount);
+
+  if (!Number.isFinite(closingAmount) || closingAmount < 0) {
+    throw new HttpError(400, "El efectivo contado no es válido");
+  }
+
+  const { expected } = calculateSessionExpected(session);
+
+  Object.assign(session, {
+    status: "closed",
+
+    closingAmount,
+
+    expectedAmount: expected,
+
+    difference: roundMoney(closingAmount - expected),
+
+    closedAt: new Date().toISOString(),
+
+    closedBy: req.user.id,
+  });
+
+  persistStore();
+
+  response(res, session, "Caja cerrada");
+});
+
+router.post("/movements", requireRole("Administrador"), (req, res) => {
+  required(req.body, ["type", "amount", "reason"]);
+
+  const type = String(req.body.type);
+
+  if (!["entrada", "retiro"].includes(type)) {
+    throw new HttpError(400, "Tipo de movimiento de caja inválido");
+  }
+
+  const movement = addCashMovement({
+    direction: type === "entrada" ? "in" : "out",
+
+    type: type === "entrada" ? "manual_income" : "withdrawal",
+
+    amount: req.body.amount,
+
+    reason: req.body.reason,
+
+    notes: req.body.notes,
+
+    userId: req.user.id,
+  });
+
+  persistStore();
 
   response(
     res,
     movement,
-    req.body.type === 'entrada'
-      ? 'Efectivo añadido a caja'
-      : 'Retiro de caja registrado',
-    201
+    type === "entrada" ? "Efectivo añadido a caja" : "Retiro registrado",
+    201,
   );
 });
 
-export {
-  getCashSummary,
-};
+router.get("/history", requireRole("Administrador"), (req, res) =>
+  response(res, [...store.cashSessions].reverse()),
+);
+
+export { cashSummary };
 
 export default router;
