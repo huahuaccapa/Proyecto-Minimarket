@@ -1,515 +1,260 @@
-import { Router } from 'express';
-import { randomUUID } from 'node:crypto';
+import { Router } from "express";
 
-import { store } from '../../data/store.js';
+import { randomUUID } from "node:crypto";
 
-import {
-  HttpError,
-  required,
-  response,
-} from '../../utils/http.js';
+import { persistStore, store } from "../../data/store.js";
+
+import { requireRole } from "../../middlewares/auth.js";
+
+import { HttpError, required, response } from "../../utils/http.js";
 
 const router = Router();
 
-const findCategoryName = (
-  categoryId
-) =>
-  store.categories?.find(
-    (item) =>
-      item.id === categoryId
-  )?.name || '';
+const money = (value) => Number(Number(value).toFixed(4));
 
-const findBrandName = (
-  brandId
-) =>
-  store.brands?.find(
-    (item) =>
-      item.id === brandId
-  )?.name || '';
+const categoryExists = (id) =>
+  store.categories.some((item) => item.id === id && item.active);
 
-const validateNumbers = (
-  product
-) => {
-  const values = [
-    product.purchasePrice,
-    product.contentQuantity,
-    product.purchaseQuantity,
-    product.unitCost,
-    product.salePrice,
-    product.stock,
-    product.minStock,
+const brandExists = (id) =>
+  !id || store.brands.some((item) => item.id === id && item.active);
+
+function buildProduct(body, current = {}) {
+  const purchasePrice = Number(
+    body.purchasePrice ?? current.purchasePrice ?? 0,
+  );
+
+  const contentQuantity = Number(
+    body.contentQuantity ?? current.contentQuantity ?? 1,
+  );
+
+  const purchaseQuantity = Number(
+    body.purchaseQuantity ?? current.purchaseQuantity ?? 1,
+  );
+
+  const salePrice = Number(body.salePrice ?? current.salePrice ?? 0);
+
+  const minStock = Number(body.minStock ?? current.minStock ?? 0);
+
+  const categoryId = String(body.categoryId ?? current.categoryId ?? "");
+
+  const brandId = String(body.brandId ?? current.brandId ?? "");
+
+  const hasExplicitStock =
+    body.stock !== undefined && body.stock !== null && body.stock !== "";
+
+  const stock = Number(
+    hasExplicitStock
+      ? body.stock
+      : current.id
+        ? current.stock
+        : purchaseQuantity * contentQuantity,
+  );
+
+  const unitCost = purchasePrice / Math.max(contentQuantity, 1);
+
+  const numbers = [
+    purchasePrice,
+    contentQuantity,
+    purchaseQuantity,
+    salePrice,
+    minStock,
+    stock,
+    unitCost,
   ];
 
   if (
-    !values.every(
-      Number.isFinite
-    )
+    !numbers.every(Number.isFinite) ||
+    purchasePrice <= 0 ||
+    contentQuantity <= 0 ||
+    purchaseQuantity <= 0 ||
+    salePrice <= 0 ||
+    minStock < 0 ||
+    stock < 0
   ) {
-    throw new HttpError(
-      400,
-      'Precios y cantidades deben ser números válidos'
-    );
+    throw new HttpError(400, "Revisa los precios y cantidades ingresados");
   }
 
-  if (
-    product.purchasePrice <= 0 ||
-    product.contentQuantity <= 0 ||
-    product.purchaseQuantity <= 0 ||
-    product.salePrice <= 0 ||
-    product.stock < 0 ||
-    product.minStock < 0
-  ) {
-    throw new HttpError(
-      400,
-      'Revisa los precios y cantidades ingresados'
-    );
+  if (!categoryExists(categoryId)) {
+    throw new HttpError(400, "Selecciona una categoría válida");
   }
-};
 
-router.get('/', (req, res) => {
-  const search = String(
-    req.query.search || ''
-  ).toLowerCase();
+  if (!brandExists(brandId)) {
+    throw new HttpError(400, "Selecciona una marca válida");
+  }
 
-  const data =
-    store.products.filter(
-      (item) =>
-        `
-          ${item.name || ''}
-          ${item.barcode || ''}
-          ${item.category || ''}
-          ${item.brand || ''}
-          ${item.lot || ''}
-          ${
-            item.sanitaryRegistration ||
-            ''
-          }
-        `
-          .toLowerCase()
-          .includes(search)
-    );
+  return {
+    ...current,
 
-  response(res, data);
+    barcode: String(body.barcode ?? current.barcode ?? "").trim(),
+
+    name: String(body.name ?? current.name ?? "").trim(),
+
+    description: String(body.description ?? current.description ?? "").trim(),
+
+    categoryId,
+
+    brandId,
+
+    purchasePresentation:
+      body.purchasePresentation ?? current.purchasePresentation ?? "unidad",
+
+    purchasePrice: money(purchasePrice),
+
+    contentQuantity,
+
+    purchaseQuantity,
+
+    unitCost: money(unitCost),
+
+    salePrice: Number(salePrice.toFixed(2)),
+
+    stock: Number(stock.toFixed(3)),
+
+    minStock,
+
+    saleUnit: body.saleUnit ?? body.unit ?? current.saleUnit ?? "unidad",
+
+    unit: body.unit ?? body.saleUnit ?? current.unit ?? "unidad",
+
+    image: String(body.image ?? current.image ?? ""),
+
+    expirationDate: String(body.expirationDate ?? current.expirationDate ?? ""),
+
+    sanitaryRegistration: String(
+      body.sanitaryRegistration ?? current.sanitaryRegistration ?? "",
+    ).trim(),
+
+    lot: String(body.lot ?? current.lot ?? "").trim(),
+
+    active: body.active ?? current.active ?? true,
+  };
+}
+
+router.get("/", (req, res) => {
+  const search = String(req.query.search || "").toLowerCase();
+
+  response(
+    res,
+    store.products.filter((item) =>
+      `${item.name} ${item.barcode} ${item.lot || ""}`
+        .toLowerCase()
+        .includes(search),
+    ),
+  );
 });
 
-router.get(
-  '/barcode/:barcode',
-  (req, res) => {
-    const product =
-      store.products.find(
-        (item) =>
-          item.barcode ===
-          req.params.barcode
-      );
-
-    if (!product) {
-      throw new HttpError(
-        404,
-        'Producto no encontrado'
-      );
-    }
-
-    response(res, product);
-  }
-);
-
-router.get('/:id', (req, res) => {
-  const product =
-    store.products.find(
-      (item) =>
-        item.id === req.params.id
-    );
+router.get("/barcode/:barcode", (req, res) => {
+  const product = store.products.find(
+    (item) => item.barcode === req.params.barcode,
+  );
 
   if (!product) {
-    throw new HttpError(
-      404,
-      'Producto no encontrado'
-    );
+    throw new HttpError(404, "Producto no encontrado");
   }
 
   response(res, product);
 });
 
-router.post('/', (req, res) => {
+router.get("/:id", (req, res) => {
+  const product = store.products.find((item) => item.id === req.params.id);
+
+  if (!product) {
+    throw new HttpError(404, "Producto no encontrado");
+  }
+
+  response(res, product);
+});
+
+router.post("/", requireRole("Administrador"), (req, res) => {
   required(req.body, [
-    'barcode',
-    'name',
-    'purchasePrice',
-    'salePrice',
+    "barcode",
+    "name",
+    "categoryId",
+    "purchasePrice",
+    "salePrice",
   ]);
 
-  const barcode = String(
-    req.body.barcode
-  ).trim();
+  const barcode = String(req.body.barcode).trim();
 
-  const duplicated =
-    store.products.some(
-      (item) =>
-        item.barcode === barcode
-    );
-
-  if (duplicated) {
-    throw new HttpError(
-      409,
-      'El código de barras ya está registrado'
-    );
+  if (store.products.some((item) => item.barcode === barcode)) {
+    throw new HttpError(409, "El código de barras ya está registrado");
   }
-
-  const category =
-    req.body.category ||
-    findCategoryName(
-      req.body.categoryId
-    );
-
-  const brand =
-    req.body.brand ||
-    findBrandName(
-      req.body.brandId
-    );
-
-  if (!category) {
-    throw new HttpError(
-      400,
-      'Selecciona una categoría válida'
-    );
-  }
-
-  const purchasePrice = Number(
-    req.body.purchasePrice
-  );
-
-  const contentQuantity = Number(
-    req.body.contentQuantity || 1
-  );
-
-  const purchaseQuantity = Number(
-    req.body.purchaseQuantity || 1
-  );
-
-  const salePrice = Number(
-    req.body.salePrice
-  );
-
-  const stock = Number(
-    req.body.stock || 0
-  );
-
-  const minStock = Number(
-    req.body.minStock || 0
-  );
-
-  const unitCost =
-    purchasePrice /
-    Math.max(
-      contentQuantity,
-      1
-    );
 
   const product = {
     id: randomUUID(),
 
-    barcode,
+    ...buildProduct(req.body),
 
-    name: String(
-      req.body.name
-    ).trim(),
-
-    description: String(
-      req.body.description || ''
-    ).trim(),
-
-    category,
-
-    categoryId:
-      req.body.categoryId || '',
-
-    brand,
-
-    brandId:
-      req.body.brandId || '',
-
-    purchasePresentation:
-      req.body.purchasePresentation ||
-      'unidad',
-
-    purchasePrice,
-
-    contentQuantity,
-
-    purchaseQuantity,
-
-    unitCost: Number(
-      unitCost.toFixed(4)
-    ),
-
-    salePrice,
-
-    stock,
-
-    minStock,
-
-    saleUnit:
-      req.body.saleUnit ||
-      req.body.unit ||
-      'unidad',
-
-    unit:
-      req.body.unit ||
-      req.body.saleUnit ||
-      'unidad',
-
-    image: String(
-      req.body.image || ''
-    ),
-
-    expirationDate:
-      req.body.expirationDate || '',
-
-    sanitaryRegistration: String(
-      req.body.sanitaryRegistration ||
-        ''
-    ).trim(),
-
-    lot: String(
-      req.body.lot || ''
-    ).trim(),
-
-    active:
-      req.body.active ?? true,
-
-    createdAt:
-      new Date().toISOString(),
+    createdAt: new Date().toISOString(),
   };
-
-  validateNumbers(product);
 
   store.products.unshift(product);
 
-  response(
-    res,
-    product,
-    'Producto creado',
-    201
-  );
+  if (product.stock > 0) {
+    store.inventoryMovements.push({
+      id: randomUUID(),
+
+      productId: product.id,
+
+      productName: product.name,
+
+      type: "entrada",
+
+      reasonType: "inventario_inicial",
+
+      reason: "Inventario inicial",
+
+      quantity: product.stock,
+
+      stockAfter: product.stock,
+
+      date: new Date().toISOString(),
+
+      createdBy: req.user.id,
+    });
+  }
+
+  persistStore();
+
+  response(res, product, "Producto creado", 201);
 });
 
-router.put('/:id', (req, res) => {
-  const index =
-    store.products.findIndex(
-      (item) =>
-        item.id === req.params.id
-    );
+router.put("/:id", requireRole("Administrador"), (req, res) => {
+  const index = store.products.findIndex((item) => item.id === req.params.id);
 
   if (index === -1) {
-    throw new HttpError(
-      404,
-      'Producto no encontrado'
-    );
+    throw new HttpError(404, "Producto no encontrado");
   }
-
-  const current =
-    store.products[index];
 
   const barcode = String(
-    req.body.barcode ??
-      current.barcode
+    req.body.barcode ?? store.products[index].barcode,
   ).trim();
 
-  const duplicated =
+  if (
     store.products.some(
-      (item, position) =>
-        item.barcode === barcode &&
-        position !== index
-    );
-
-  if (duplicated) {
-    throw new HttpError(
-      409,
-      'El código de barras ya está registrado'
-    );
+      (item, position) => position !== index && item.barcode === barcode,
+    )
+  ) {
+    throw new HttpError(409, "El código de barras ya está registrado");
   }
 
-  const category =
-    req.body.category ||
-    findCategoryName(
-      req.body.categoryId
-    ) ||
-    current.category;
-
-  const brand =
-    req.body.brand ||
-    findBrandName(
-      req.body.brandId
-    ) ||
-    current.brand ||
-    '';
-
-  if (!category) {
-    throw new HttpError(
-      400,
-      'Selecciona una categoría válida'
-    );
-  }
-
-  const purchasePrice = Number(
-    req.body.purchasePrice ??
-      current.purchasePrice
-  );
-
-  const contentQuantity = Number(
-    req.body.contentQuantity ??
-      current.contentQuantity ??
-      1
-  );
-
-  const purchaseQuantity = Number(
-    req.body.purchaseQuantity ??
-      current.purchaseQuantity ??
-      1
-  );
-
-  const salePrice = Number(
-    req.body.salePrice ??
-      current.salePrice
-  );
-
-  const stock = Number(
-    req.body.stock ??
-      current.stock
-  );
-
-  const minStock = Number(
-    req.body.minStock ??
-      current.minStock
-  );
-
-  const unitCost =
-    purchasePrice /
-    Math.max(
-      contentQuantity,
-      1
-    );
-
-  const product = {
-    ...current,
-    ...req.body,
-
-    barcode,
-
-    name: String(
-      req.body.name ??
-        current.name
-    ).trim(),
-
-    description: String(
-      req.body.description ??
-        current.description ??
-        ''
-    ).trim(),
-
-    category,
-
-    categoryId:
-      req.body.categoryId ??
-      current.categoryId ??
-      '',
-
-    brand,
-
-    brandId:
-      req.body.brandId ??
-      current.brandId ??
-      '',
-
-    purchasePrice,
-
-    contentQuantity,
-
-    purchaseQuantity,
-
-    unitCost: Number(
-      unitCost.toFixed(4)
+  const updated = {
+    ...buildProduct(
+      {
+        ...req.body,
+        barcode,
+      },
+      store.products[index],
     ),
 
-    salePrice,
-
-    stock,
-
-    minStock,
-
-    saleUnit:
-      req.body.saleUnit ??
-      current.saleUnit ??
-      current.unit ??
-      'unidad',
-
-    unit:
-      req.body.unit ??
-      req.body.saleUnit ??
-      current.unit ??
-      current.saleUnit ??
-      'unidad',
-
-    image: String(
-      req.body.image ??
-        current.image ??
-        ''
-    ),
-
-    expirationDate:
-      req.body.expirationDate ??
-      current.expirationDate ??
-      '',
-
-    sanitaryRegistration: String(
-      req.body.sanitaryRegistration ??
-        current.sanitaryRegistration ??
-        ''
-    ).trim(),
-
-    lot: String(
-      req.body.lot ??
-        current.lot ??
-        ''
-    ).trim(),
-
-    updatedAt:
-      new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   };
 
-  validateNumbers(product);
+  store.products[index] = updated;
 
-  store.products[index] =
-    product;
+  persistStore();
 
-  response(
-    res,
-    product,
-    'Producto actualizado'
-  );
-});
-
-router.delete('/:id', (req, res) => {
-  const product =
-    store.products.find(
-      (item) =>
-        item.id === req.params.id
-    );
-
-  if (!product) {
-    throw new HttpError(
-      404,
-      'Producto no encontrado'
-    );
-  }
-
-  product.active = false;
-
-  response(
-    res,
-    product,
-    'Producto desactivado'
-  );
+  response(res, updated, "Producto actualizado");
 });
 
 export default router;
