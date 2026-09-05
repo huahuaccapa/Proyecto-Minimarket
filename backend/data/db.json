@@ -1,0 +1,170 @@
+{
+  "meta": {
+    "sequences": {
+      "sale": 0,
+      "purchase": 0,
+      "cashSession": 0
+    },
+    "version": 2
+  },
+  "users": [
+    {
+      "id": "u1",
+      "username": "admin",
+      "name": "Administrador",
+      "passwordHash": "a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3",
+      "role": "Administrador",
+      "active": true
+    },
+    {
+      "id": "u2",
+      "username": "aydee",
+      "name": "Aydee",
+      "passwordHash": "a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3",
+      "role": "Vendedora",
+      "active": true
+    }
+  ],
+  "categories": [
+    {
+      "id": "cat1",
+      "name": "Abarrotes",
+      "description": "Alimentos secos y productos de despensa",
+      "active": true,
+      "createdAt": "2026-09-05T00:54:31.909Z"
+    },
+    {
+      "id": "cat2",
+      "name": "Bebidas",
+      "description": "Gaseosas, agua, jugos y bebidas",
+      "active": true,
+      "createdAt": "2026-09-05T00:54:31.909Z"
+    },
+    {
+      "id": "cat3",
+      "name": "Lácteos",
+      "description": "Leche, yogurt, queso y derivados",
+      "active": true,
+      "createdAt": "2026-09-05T00:54:31.909Z"
+    },
+    {
+      "id": "cat4",
+      "name": "Limpieza",
+      "description": "Productos para limpieza del hogar",
+      "active": true,
+      "createdAt": "2026-09-05T00:54:31.909Z"
+    },
+    {
+      "id": "cat5",
+      "name": "Mascotas",
+      "description": "Alimentos y cuidado para mascotas",
+      "active": true,
+      "createdAt": "2026-09-05T00:54:31.909Z"
+    }
+  ],
+  "brands": [
+    {
+      "id": "brand1",
+      "name": "Gloria",
+      "description": "Productos lácteos y alimentos",
+      "active": true,
+      "createdAt": "2026-09-05T00:54:31.909Z"
+    },
+    {
+      "id": "brand2",
+      "name": "Inca Kola",
+      "description": "Bebidas gaseosas",
+      "active": true,
+      "createdAt": "2026-09-05T00:54:31.909Z"
+    },
+    {
+      "id": "brand3",
+      "name": "Costeño",
+      "description": "Abarrotes",
+      "active": true,
+      "createdAt": "2026-09-05T00:54:31.909Z"
+    },
+    {
+      "id": "brand4",
+      "name": "Primor",
+      "description": "Aceites y alimentos",
+      "active": true,
+      "createdAt": "2026-09-05T00:54:31.909Z"
+    },
+    {
+      "id": "brand5",
+      "name": "Bolívar",
+      "description": "Limpieza del hogar",
+      "active": true,
+      "createdAt": "2026-09-05T00:54:31.909Z"
+    }
+  ],
+  "products": [
+    {
+      "id": "p1",
+      "barcode": "7750243051205",
+      "name": "Leche Gloria Entera",
+      "description": "Leche evaporada entera",
+      "categoryId": "cat3",
+      "brandId": "brand1",
+      "purchasePresentation": "unidad",
+      "purchasePrice": 3.6,
+      "contentQuantity": 1,
+      "purchaseQuantity": 28,
+      "unitCost": 3.6,
+      "salePrice": 4.5,
+      "stock": 28,
+      "minStock": 8,
+      "saleUnit": "unidad",
+      "image": "",
+      "expirationDate": "",
+      "sanitaryRegistration": "",
+      "lot": "",
+      "active": true,
+      "createdAt": "2026-09-05T00:54:31.909Z"
+    },
+    {
+      "id": "p2",
+      "barcode": "7750885001019",
+      "name": "Inca Kola 600 ml",
+      "description": "Botella personal de 600 ml",
+      "categoryId": "cat2",
+      "brandId": "brand2",
+      "purchasePresentation": "paquete",
+      "purchasePrice": 26.4,
+      "contentQuantity": 12,
+      "purchaseQuantity": 3,
+      "unitCost": 2.2,
+      "salePrice": 3,
+      "stock": 36,
+      "minStock": 10,
+      "saleUnit": "unidad",
+      "image": "",
+      "expirationDate": "",
+      "sanitaryRegistration": "",
+      "lot": "",
+      "active": true,
+      "createdAt": "2026-09-05T00:54:31.909Z"
+    }
+  ],
+  "suppliers": [
+    {
+      "id": "sup1",
+      "businessName": "Distribuidora Arequipa",
+      "ruc": "20400000001",
+      "phone": "054-400000",
+      "email": "ventas@distribuidoraarequipa.pe",
+      "address": "Arequipa, Perú",
+      "notes": "Proveedor principal.",
+      "active": true,
+      "representatives": [],
+      "createdAt": "2026-09-05T00:54:31.909Z"
+    }
+  ],
+  "sales": [],
+  "purchases": [],
+  "expenses": [],
+  "inventoryMovements": [],
+  "cashMovements": [],
+  "cashSessions": []
+}
