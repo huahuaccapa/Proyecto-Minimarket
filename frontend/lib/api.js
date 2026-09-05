@@ -1,145 +1,231 @@
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ||
-  'http://localhost:4000/api';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
+
+let memoryToken = "";
+
+export function setAuthToken(token) {
+  memoryToken = token || "";
+
+  if (typeof window !== "undefined") {
+    if (memoryToken) {
+      localStorage.setItem("minimarket_token", memoryToken);
+    } else {
+      localStorage.removeItem("minimarket_token");
+    }
+  }
+}
+
+export function getAuthToken() {
+  if (memoryToken) {
+    return memoryToken;
+  }
+
+  if (typeof window !== "undefined") {
+    memoryToken = localStorage.getItem("minimarket_token") || "";
+  }
+
+  return memoryToken;
+}
 
 async function request(path, options = {}) {
+  const token = getAuthToken();
+
   const response = await fetch(`${API_URL}${path}`, {
+    ...options,
+
     headers: {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
+
+      ...(token
+        ? {
+            Authorization: `Bearer ${token}`,
+          }
+        : {}),
+
       ...options.headers,
     },
-    ...options,
   });
 
   const data = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    throw new Error(
-      data.message || 'No se pudo completar la solicitud'
-    );
+    if (response.status === 401) {
+      setAuthToken("");
+    }
+
+    throw new Error(data.message || "No se pudo completar la solicitud");
   }
 
   return data;
 }
 
 export const api = {
-  health: () => request('/health'),
+  health: () => request("/health"),
 
   login: (credentials) =>
-    request('/auth/login', {
-      method: 'POST',
+    request("/auth/login", {
+      method: "POST",
+
       body: JSON.stringify(credentials),
     }),
 
-  dashboard: () => request('/dashboard'),
+  me: () => request("/auth/me"),
 
-  products: () => request('/products'),
+  logout: () =>
+    request("/auth/logout", {
+      method: "POST",
+    }),
+
+  dashboard: () => request("/dashboard"),
+
+  products: () => request("/products"),
 
   createProduct: (product) =>
-    request('/products', {
-      method: 'POST',
+    request("/products", {
+      method: "POST",
+
       body: JSON.stringify(product),
     }),
 
   updateProduct: (id, product) =>
     request(`/products/${id}`, {
-      method: 'PUT',
+      method: "PUT",
+
       body: JSON.stringify(product),
     }),
 
-  findBarcode: (barcode) =>
-    request(`/products/barcode/${barcode}`),
+  findBarcode: (barcode) => request(`/products/barcode/${barcode}`),
 
-  categories: () =>
-    request('/catalogs/categories'),
+  categories: () => request("/catalogs/categories"),
 
-  createCategory: (category) =>
-    request('/catalogs/categories', {
-      method: 'POST',
-      body: JSON.stringify(category),
+  createCategory: (item) =>
+    request("/catalogs/categories", {
+      method: "POST",
+
+      body: JSON.stringify(item),
     }),
 
-  updateCategory: (id, category) =>
+  updateCategory: (id, item) =>
     request(`/catalogs/categories/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(category),
+      method: "PUT",
+
+      body: JSON.stringify(item),
     }),
 
-  brands: () =>
-    request('/catalogs/brands'),
+  brands: () => request("/catalogs/brands"),
 
-  createBrand: (brand) =>
-    request('/catalogs/brands', {
-      method: 'POST',
-      body: JSON.stringify(brand),
+  createBrand: (item) =>
+    request("/catalogs/brands", {
+      method: "POST",
+
+      body: JSON.stringify(item),
     }),
 
-  updateBrand: (id, brand) =>
+  updateBrand: (id, item) =>
     request(`/catalogs/brands/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(brand),
+      method: "PUT",
+
+      body: JSON.stringify(item),
     }),
 
-  sales: () =>
-    request('/sales'),
+  sales: () => request("/sales"),
 
   createSale: (sale) =>
-    request('/sales', {
-      method: 'POST',
+    request("/sales", {
+      method: "POST",
+
       body: JSON.stringify(sale),
     }),
 
+  voidSale: (id, reason) =>
+    request(`/sales/${id}/void`, {
+      method: "POST",
+
+      body: JSON.stringify({
+        reason,
+      }),
+    }),
+
   adjustStock: (payload) =>
-    request('/inventory/adjust', {
-      method: 'POST',
+    request("/inventory/adjust", {
+      method: "POST",
+
       body: JSON.stringify(payload),
     }),
 
-  movements: () =>
-    request('/inventory/movements'),
+  movements: () => request("/inventory/movements"),
 
-  purchases: () =>
-    request('/purchases'),
+  expiring: () => request("/inventory/expiring"),
+
+  purchases: () => request("/purchases"),
 
   createPurchase: (purchase) =>
-    request('/purchases', {
-      method: 'POST',
+    request("/purchases", {
+      method: "POST",
+
       body: JSON.stringify(purchase),
     }),
 
-  suppliers: () =>
-    request('/purchases/suppliers'),
+  suppliers: () => request("/purchases/suppliers"),
 
   createSupplier: (supplier) =>
-    request('/purchases/suppliers', {
-      method: 'POST',
+    request("/purchases/suppliers", {
+      method: "POST",
+
       body: JSON.stringify(supplier),
     }),
 
   updateSupplier: (id, supplier) =>
     request(`/purchases/suppliers/${id}`, {
-      method: 'PUT',
+      method: "PUT",
+
       body: JSON.stringify(supplier),
     }),
 
-  expenses: () =>
-    request('/expenses'),
+  expenses: () => request("/expenses"),
 
   createExpense: (expense) =>
-    request('/expenses', {
-      method: 'POST',
+    request("/expenses", {
+      method: "POST",
+
       body: JSON.stringify(expense),
     }),
 
-  report: () =>
-    request('/reports/summary'),
+  voidExpense: (id, reason) =>
+    request(`/expenses/${id}/void`, {
+      method: "POST",
 
-  cash: () =>
-    request('/cash'),
+      body: JSON.stringify({
+        reason,
+      }),
+    }),
+
+  report: (period = "weekly") =>
+    request(`/reports/summary?period=${encodeURIComponent(period)}`),
+
+  cash: () => request("/cash"),
+
+  openCash: (openingAmount) =>
+    request("/cash/open", {
+      method: "POST",
+
+      body: JSON.stringify({
+        openingAmount,
+      }),
+    }),
+
+  closeCash: (closingAmount) =>
+    request("/cash/close", {
+      method: "POST",
+
+      body: JSON.stringify({
+        closingAmount,
+      }),
+    }),
 
   createCashMovement: (movement) =>
-    request('/cash/movements', {
-      method: 'POST',
+    request("/cash/movements", {
+      method: "POST",
+
       body: JSON.stringify(movement),
     }),
 };
