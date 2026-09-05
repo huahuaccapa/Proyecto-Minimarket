@@ -1,85 +1,139 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import {
+  useMemo,
+  useState,
+} from 'react';
+
 import {
   Plus,
-  FileText,
   Building2,
-  UserRound,
-  Phone,
-  Mail,
-  MapPin,
-  Eye,
-  ImageIcon,
   ReceiptText,
   Pencil,
   Trash2,
 } from 'lucide-react';
 
 import {
+  EmptyState,
   Modal,
   PageTitle,
-  EmptyState,
 } from '../components/ui';
 
 import {
+  createId,
   formatDate,
   formatMoney,
-  createId,
 } from '../data/mock';
 
-const emptyRepresentative = () => ({
-  id: createId(),
-  name: '',
-  position: '',
-  phone: '',
-  email: '',
-  notes: '',
-});
+const emptySupplier =
+  () => ({
+    businessName:
+      '',
 
-const emptySupplier = () => ({
-  businessName: '',
-  ruc: '',
-  phone: '',
-  email: '',
-  address: '',
-  notes: '',
-  representatives: [],
+    ruc: '',
+
+    phone: '',
+
+    email: '',
+
+    address: '',
+
+    notes: '',
+
+    representatives:
+      [],
+  });
+
+const newLine = (
+  product,
+) => ({
+  id: createId(),
+
+  productId:
+    product?.id ||
+    '',
+
+  packages: 1,
+
+  contentQuantity:
+    Number(
+      product?.contentQuantity ||
+        1,
+    ),
+
+  purchasePrice:
+    Number(
+      product?.purchasePrice ||
+        0,
+    ),
+
+  lot: '',
+
+  expirationDate:
+    '',
 });
 
 const emptyPurchase = (
-  supplierId = ''
+  supplierId = '',
+  product = null,
 ) => ({
   supplierId,
-  documentType: 'Factura',
-  documentNumber: '',
-  date: new Date()
-    .toISOString()
-    .slice(0, 10),
 
-  total: '',
-  items: '',
-  currency: 'PEN',
+  documentType:
+    'Factura',
+
+  documentNumber:
+    '',
+
+  date:
+    new Date()
+      .toISOString()
+      .slice(
+        0,
+        10,
+      ),
+
+  paymentMethod:
+    'Efectivo',
+
+  paymentStatus:
+    'Pagado',
 
   notes: '',
 
-  documentName: '',
-  documentMimeType: '',
-  documentDataUrl: '',
+  documentName:
+    '',
+
+  documentMimeType:
+    '',
+
+  documentDataUrl:
+    '',
+
+  detail: [
+    newLine(
+      product,
+    ),
+  ],
 });
 
 export default function PurchasesView({
   purchases,
   suppliers,
+  products,
   onSavePurchase,
   onSaveSupplier,
 }) {
-  const [tab, setTab] =
-    useState('documents');
+  const [
+    tab,
+    setTab,
+  ] = useState(
+    'purchases',
+  );
 
   const [
-    purchaseForm,
-    setPurchaseForm,
+    form,
+    setForm,
   ] = useState(null);
 
   const [
@@ -87,270 +141,308 @@ export default function PurchasesView({
     setSupplierForm,
   ] = useState(null);
 
-  const [detail, setDetail] =
-    useState(null);
+  const [
+    error,
+    setError,
+  ] = useState('');
 
-  const [error, setError] =
-    useState('');
-
-  /*
-   * Facilita encontrar un proveedor
-   * usando supplierId.
-   */
-  const supplierById =
+  const productMap =
     useMemo(
       () =>
         new Map(
-          suppliers.map(
-            (supplier) => [
-              supplier.id,
-              supplier,
-            ]
-          )
+          products.map(
+            (
+              product,
+            ) => [
+              product.id,
+              product,
+            ],
+          ),
         ),
-      [suppliers]
+      [products],
     );
 
-  /*
-   * ABRIR FORMULARIO DE DOCUMENTO
-   */
-  const openPurchase = () => {
-    setError('');
-
-    setPurchaseForm(
-      emptyPurchase(
-        suppliers[0]?.id || ''
-      )
-    );
-  };
-
-  /*
-   * ABRIR FORMULARIO DE PROVEEDOR
-   */
-  const openSupplier = (
-    supplier = null
-  ) => {
-    setError('');
-
-    setSupplierForm(
-      supplier
-        ? {
-            ...supplier,
-
-            representatives:
-              (
-                supplier.representatives ||
-                []
-              ).map(
-                (item) => ({
-                  ...item,
-                })
+  const total =
+    form
+      ? form.detail.reduce(
+          (
+            sum,
+            line,
+          ) =>
+            sum +
+            Number(
+              line.packages ||
+                0,
+            ) *
+              Number(
+                line.purchasePrice ||
+                  0,
               ),
-          }
-        : emptySupplier()
-    );
-  };
+          0,
+        )
+      : 0;
 
-  /*
-   * LEER IMAGEN DE FACTURA / BOLETA
-   */
-  const readDocument = (
-    file
-  ) => {
-    if (!file) {
-      return;
-    }
+  const units =
+    form
+      ? form.detail.reduce(
+          (
+            sum,
+            line,
+          ) =>
+            sum +
+            Number(
+              line.packages ||
+                0,
+            ) *
+              Number(
+                line.contentQuantity ||
+                  0,
+              ),
+          0,
+        )
+      : 0;
 
-    /*
-     * Limitamos el tamaño debido a que
-     * actualmente el backend todavía
-     * almacena todo en memoria.
-     */
-    if (
-      file.size >
-      1.5 * 1024 * 1024
-    ) {
-      setError(
-        'La imagen debe pesar como máximo 1.5 MB.'
-      );
-
-      return;
-    }
-
-    /*
-     * En esta versión usamos imágenes
-     * porque podemos visualizarlas
-     * directamente dentro del sistema.
-     */
-    if (
-      !file.type.startsWith(
-        'image/'
-      )
-    ) {
-      setError(
-        'Por ahora adjunta una imagen JPG, PNG o WEBP para poder visualizarla dentro del sistema.'
-      );
-
-      return;
-    }
-
-    const reader =
-      new FileReader();
-
-    reader.onload = () => {
-      setPurchaseForm(
-        (current) => ({
-          ...current,
-
-          documentName:
-            file.name,
-
-          documentMimeType:
-            file.type,
-
-          documentDataUrl:
-            reader.result,
-        })
-      );
-
-      setError('');
-    };
-
-    reader.readAsDataURL(file);
-  };
-
-  /*
-   * GUARDAR BOLETA / FACTURA
-   */
-  const submitPurchase =
-    async (event) => {
-      event.preventDefault();
-
-      setError('');
-
-      if (
-        !purchaseForm.supplierId
-      ) {
-        setError(
-          'Primero registra o selecciona un proveedor.'
-        );
-
-        return;
-      }
-
-      await onSavePurchase({
-        ...purchaseForm,
-
-        total: Number(
-          purchaseForm.total
-        ),
-
-        items: Number(
-          purchaseForm.items ||
-            0
-        ),
-      });
-
-      setPurchaseForm(null);
-    };
-
-  /*
-   * GUARDAR PROVEEDOR
-   */
-  const submitSupplier =
-    async (event) => {
-      event.preventDefault();
-
-      setError('');
-
-      /*
-       * Quitamos representantes
-       * completamente vacíos.
-       */
-      const cleanRepresentatives =
-        (
-          supplierForm.representatives ||
-          []
-        ).filter(
-          (item) =>
-            item.name.trim() ||
-            item.phone.trim() ||
-            item.email.trim()
-        );
-
-      await onSaveSupplier({
-        ...supplierForm,
-
-        representatives:
-          cleanRepresentatives,
-      });
-
-      setSupplierForm(null);
-    };
-
-  /*
-   * AÑADIR REPRESENTANTE
-   */
-  const addRepresentative =
-    () => {
-      setSupplierForm(
-        (current) => ({
-          ...current,
-
-          representatives: [
-            ...(
-              current.representatives ||
-              []
-            ),
-
-            emptyRepresentative(),
-          ],
-        })
-      );
-    };
-
-  /*
-   * MODIFICAR REPRESENTANTE
-   */
-  const updateRepresentative = (
+  const updateLine = (
     id,
     field,
-    value
+    value,
   ) => {
-    setSupplierForm(
-      (current) => ({
+    setForm(
+      (
+        current,
+      ) => ({
         ...current,
 
-        representatives:
-          current.representatives.map(
-            (item) =>
-              item.id === id
-                ? {
-                    ...item,
-                    [field]:
-                      value,
-                  }
-                : item
+        detail:
+          current.detail.map(
+            (
+              line,
+            ) => {
+              if (
+                line.id !==
+                id
+              ) {
+                return line;
+              }
+
+              if (
+                field ===
+                'productId'
+              ) {
+                const product =
+                  productMap.get(
+                    value,
+                  );
+
+                return {
+                  ...line,
+
+                  productId:
+                    value,
+
+                  contentQuantity:
+                    Number(
+                      product?.contentQuantity ||
+                        1,
+                    ),
+
+                  purchasePrice:
+                    Number(
+                      product?.purchasePrice ||
+                        0,
+                    ),
+
+                  lot: '',
+
+                  expirationDate:
+                    '',
+                };
+              }
+
+              return {
+                ...line,
+
+                [field]:
+                  value,
+              };
+            },
           ),
-      })
+      }),
     );
   };
 
-  /*
-   * ELIMINAR REPRESENTANTE
-   */
-  const removeRepresentative =
-    (id) => {
-      setSupplierForm(
-        (current) => ({
-          ...current,
+  const submitPurchase =
+    async (
+      event,
+    ) => {
+      event.preventDefault();
 
-          representatives:
-            current.representatives.filter(
-              (item) =>
-                item.id !== id
-            ),
-        })
+      setError('');
+
+      try {
+        if (
+          !form.supplierId
+        ) {
+          throw new Error(
+            'Selecciona un proveedor.',
+          );
+        }
+
+        if (
+          !form.documentNumber.trim()
+        ) {
+          throw new Error(
+            'Ingresa el número del comprobante.',
+          );
+        }
+
+        const detail =
+          form.detail.map(
+            (
+              {
+                id,
+                ...line
+              },
+            ) => ({
+              ...line,
+
+              packages:
+                Number(
+                  line.packages,
+                ),
+
+              contentQuantity:
+                Number(
+                  line.contentQuantity,
+                ),
+
+              purchasePrice:
+                Number(
+                  line.purchasePrice,
+                ),
+            }),
+          );
+
+        if (
+          detail.some(
+            (
+              line,
+            ) =>
+              !line.productId,
+          )
+        ) {
+          throw new Error(
+            'Selecciona un producto en cada fila.',
+          );
+        }
+
+        if (
+          detail.some(
+            (
+              line,
+            ) =>
+              !Number.isFinite(
+                line.packages,
+              ) ||
+              line.packages <=
+                0,
+          )
+        ) {
+          throw new Error(
+            'La cantidad comprada debe ser mayor que cero.',
+          );
+        }
+
+        if (
+          detail.some(
+            (
+              line,
+            ) =>
+              !Number.isFinite(
+                line.contentQuantity,
+              ) ||
+              line.contentQuantity <=
+                0,
+          )
+        ) {
+          throw new Error(
+            'Las unidades por presentación deben ser mayores que cero.',
+          );
+        }
+
+        if (
+          detail.some(
+            (
+              line,
+            ) =>
+              !Number.isFinite(
+                line.purchasePrice,
+              ) ||
+              line.purchasePrice <=
+                0,
+          )
+        ) {
+          throw new Error(
+            'Todos los productos deben tener un costo válido.',
+          );
+        }
+
+        await onSavePurchase({
+          ...form,
+          detail,
+        });
+
+        setForm(null);
+      } catch (error) {
+        setError(
+          error.message,
+        );
+      }
+    };
+
+  const submitSupplier =
+    async (
+      event,
+    ) => {
+      event.preventDefault();
+
+      setError('');
+
+      try {
+        await onSaveSupplier(
+          supplierForm,
+        );
+
+        setSupplierForm(
+          null,
+        );
+      } catch (error) {
+        setError(
+          error.message,
+        );
+      }
+    };
+
+  const openPurchase =
+    () => {
+      setError('');
+
+      setForm(
+        emptyPurchase(
+          suppliers[0]
+            ?.id,
+
+          products[0],
+        ),
+      );
+    };
+
+  const openSupplier =
+    () => {
+      setError('');
+
+      setSupplierForm(
+        emptySupplier(),
       );
     };
 
@@ -358,257 +450,253 @@ export default function PurchasesView({
     <>
       <PageTitle
         eyebrow="Abastecimiento"
-        title="Compras y boletas"
-        description="Organiza facturas y boletas de proveedores, conserva su imagen y administra los contactos comerciales de cada proveedor."
+        title="Compras y proveedores"
+        description="Cada compra aumenta el inventario y, cuando se paga en efectivo, descuenta automáticamente el dinero de la caja."
         action={
           <button
             className="btn-primary"
-            onClick={
+            onClick={() =>
               tab ===
-              'documents'
-                ? openPurchase
-                : () =>
-                    openSupplier()
+              'purchases'
+                ? openPurchase()
+                : openSupplier()
             }
           >
-            <Plus size={18} />
+            <Plus
+              size={18}
+            />
 
             {tab ===
-            'documents'
-              ? 'Registrar documento'
+            'purchases'
+              ? 'Nueva compra'
               : 'Nuevo proveedor'}
           </button>
         }
       />
 
-      {/* PESTAÑAS */}
-
       <div className="mb-5 flex w-fit rounded-2xl bg-black/5 p-1">
-
         <button
-          className={`
-            rounded-xl
-            px-4
-            py-2
-            text-sm
-            font-black
-
-            ${
-              tab ===
-              'documents'
-                ? 'bg-white shadow-sm'
-                : 'text-black/45'
-            }
-          `}
+          className={`rounded-xl px-4 py-2 text-sm font-black ${
+            tab ===
+            'purchases'
+              ? 'bg-white shadow-sm'
+              : 'text-black/45'
+          }`}
           onClick={() =>
             setTab(
-              'documents'
+              'purchases',
             )
           }
         >
-          Documentos de compra
+          Compras
         </button>
 
         <button
-          className={`
-            rounded-xl
-            px-4
-            py-2
-            text-sm
-            font-black
-
-            ${
-              tab ===
-              'suppliers'
-                ? 'bg-white shadow-sm'
-                : 'text-black/45'
-            }
-          `}
+          className={`rounded-xl px-4 py-2 text-sm font-black ${
+            tab ===
+            'suppliers'
+              ? 'bg-white shadow-sm'
+              : 'text-black/45'
+          }`}
           onClick={() =>
             setTab(
-              'suppliers'
+              'suppliers',
             )
           }
         >
-          Proveedores y
-          representantes
+          Proveedores
         </button>
       </div>
 
-      {/* ===================================== */}
-      {/* DOCUMENTOS DE COMPRA */}
-      {/* ===================================== */}
-
       {tab ===
-      'documents' ? (
+      'purchases' ? (
         purchases.length ? (
           <section className="grid gap-4 xl:grid-cols-2">
-
             {purchases.map(
-              (purchase) => {
-                const supplier =
-                  supplierById.get(
-                    purchase.supplierId
-                  );
-
-                return (
-                  <article
-                    className="panel p-5"
-                    key={
-                      purchase.id
-                    }
-                  >
-                    <div className="flex items-start justify-between gap-3">
-
-                      <div className="flex items-center gap-3">
-
-                        <span className="grid size-11 place-items-center rounded-2xl bg-amber/20 text-[#8c5c00]">
-                          <ReceiptText
-                            size={
-                              20
-                            }
-                          />
-                        </span>
-
-                        <div>
-                          <p className="text-xs font-black uppercase tracking-wide text-black/35">
-                            {purchase.documentType ||
-                              'Documento'}
-                          </p>
-
-                          <h2 className="font-black">
-                            {purchase.documentNumber ||
-                              purchase.number}
-                          </h2>
-                        </div>
-                      </div>
-
-                      <span className="badge bg-black/5 text-black/45">
-                        {
-                          purchase.number
-                        }
+              (
+                purchase,
+              ) => (
+                <article
+                  className="panel p-5"
+                  key={
+                    purchase.id
+                  }
+                >
+                  <div className="flex justify-between gap-3">
+                    <div className="flex gap-3">
+                      <span className="grid size-11 place-items-center rounded-2xl bg-amber/20">
+                        <ReceiptText
+                          size={
+                            20
+                          }
+                        />
                       </span>
-                    </div>
-
-                    <div className="mt-5">
-                      <p className="text-sm text-black/40">
-                        Proveedor
-                      </p>
-
-                      <p className="font-black">
-                        {supplier?.businessName ||
-                          purchase.supplier}
-                      </p>
-                    </div>
-
-                    <div className="mt-4 grid grid-cols-2 gap-3 rounded-2xl bg-cream p-4 text-sm">
 
                       <div>
-                        <p className="text-black/40">
-                          Fecha
+                        <p className="text-xs font-black text-black/35">
+                          {
+                            purchase.documentType
+                          }
                         </p>
 
-                        <strong>
-                          {formatDate(
-                            purchase.date
-                          )}
-                        </strong>
-                      </div>
-
-                      <div>
-                        <p className="text-black/40">
-                          Total
-                        </p>
-
-                        <strong>
-                          {formatMoney(
-                            purchase.total
-                          )}
-                        </strong>
-                      </div>
-
-                      <div>
-                        <p className="text-black/40">
-                          Artículos
-                        </p>
-
-                        <strong>
-                          {purchase.items ||
-                            0}
-                        </strong>
-                      </div>
-
-                      <div>
-                        <p className="text-black/40">
-                          Adjunto
-                        </p>
-
-                        <strong>
-                          {purchase.documentDataUrl
-                            ? 'Con imagen'
-                            : 'Sin imagen'}
-                        </strong>
+                        <h2 className="font-black">
+                          {
+                            purchase.documentNumber
+                          }
+                        </h2>
                       </div>
                     </div>
 
-                    <button
-                      className="mt-4 inline-flex items-center gap-2 text-sm font-black text-forest"
-                      onClick={() =>
-                        setDetail(
-                          purchase
-                        )
+                    <span className="badge bg-black/5">
+                      {
+                        purchase.number
                       }
-                    >
-                      <Eye
-                        size={17}
-                      />
+                    </span>
+                  </div>
 
-                      Ver detalles
-                    </button>
-                  </article>
-                );
-              }
+                  <p className="mt-4 font-black">
+                    {
+                      purchase.supplier
+                    }
+                  </p>
+
+                  <div className="mt-4 grid grid-cols-2 gap-3 rounded-2xl bg-cream p-4 text-sm">
+                    <div>
+                      <p className="text-black/40">
+                        Fecha
+                      </p>
+
+                      <strong>
+                        {formatDate(
+                          purchase.date,
+                        )}
+                      </strong>
+                    </div>
+
+                    <div>
+                      <p className="text-black/40">
+                        Total
+                      </p>
+
+                      <strong>
+                        {formatMoney(
+                          purchase.total,
+                        )}
+                      </strong>
+                    </div>
+
+                    <div>
+                      <p className="text-black/40">
+                        Unidades
+                      </p>
+
+                      <strong>
+                        {
+                          purchase.items
+                        }
+                      </strong>
+                    </div>
+
+                    <div>
+                      <p className="text-black/40">
+                        Pago
+                      </p>
+
+                      <strong>
+                        {
+                          purchase.paymentMethod
+                        }
+                      </strong>
+                    </div>
+                  </div>
+
+                  {purchase.paymentStatus && (
+                    <p className="mt-3 text-xs font-bold text-black/45">
+                      Estado:{' '}
+                      {
+                        purchase.paymentStatus
+                      }
+                    </p>
+                  )}
+
+                  <div className="mt-4 space-y-2">
+                    {(
+                      purchase.detail ||
+                      []
+                    ).map(
+                      (
+                        line,
+                        index,
+                      ) => (
+                        <div
+                          key={`${purchase.id}-${index}`}
+                          className="flex justify-between gap-3 text-sm"
+                        >
+                          <span>
+                            {
+                              line.productName
+                            }{' '}
+                            ·{' '}
+                            {
+                              line.units
+                            }{' '}
+                            und.
+                          </span>
+
+                          <strong>
+                            {formatMoney(
+                              line.subtotal,
+                            )}
+                          </strong>
+                        </div>
+                      ),
+                    )}
+                  </div>
+                </article>
+              ),
             )}
           </section>
         ) : (
-          <EmptyState text="Todavía no hay boletas o facturas registradas" />
+          <EmptyState text="Todavía no hay compras registradas" />
         )
       ) : suppliers.length ? (
-
-        /* ===================================== */
-        /* PROVEEDORES */
-        /* ===================================== */
-
         <section className="grid gap-4 xl:grid-cols-2">
-
           {suppliers.map(
-            (supplier) => (
+            (
+              supplier,
+            ) => (
               <article
                 className="panel p-5"
                 key={
                   supplier.id
                 }
               >
-                <div className="flex items-start justify-between gap-3">
-
+                <div className="flex justify-between">
                   <span className="grid size-11 place-items-center rounded-2xl bg-mint text-forest">
                     <Building2
-                      size={20}
+                      size={
+                        20
+                      }
                     />
                   </span>
 
                   <button
                     className="inline-flex items-center gap-2 text-xs font-black text-forest"
-                    onClick={() =>
-                      openSupplier(
-                        supplier
-                      )
-                    }
+                    onClick={() => {
+                      setError(
+                        '',
+                      );
+
+                      setSupplierForm({
+                        ...supplier,
+                      });
+                    }}
                   >
                     <Pencil
-                      size={15}
+                      size={
+                        15
+                      }
                     />
-
                     Editar
                   </button>
                 </div>
@@ -619,228 +707,147 @@ export default function PurchasesView({
                   }
                 </h2>
 
-                <p className="text-sm text-black/40">
+                <p className="mt-2 text-sm text-black/45">
                   RUC:{' '}
                   {supplier.ruc ||
-                    'No registrado'}
+                    '—'}
                 </p>
 
-                <div className="mt-4 space-y-2 text-sm">
+                <p className="text-sm text-black/45">
+                  {supplier.phone ||
+                    'Sin teléfono'}{' '}
+                  ·{' '}
+                  {supplier.email ||
+                    'Sin correo'}
+                </p>
 
-                  {supplier.phone && (
-                    <p className="flex items-center gap-2">
-                      <Phone
-                        size={
-                          15
-                        }
-                      />
-
-                      {
-                        supplier.phone
-                      }
-                    </p>
-                  )}
-
-                  {supplier.email && (
-                    <p className="flex items-center gap-2">
-                      <Mail
-                        size={
-                          15
-                        }
-                      />
-
-                      {
-                        supplier.email
-                      }
-                    </p>
-                  )}
-
-                  {supplier.address && (
-                    <p className="flex items-center gap-2">
-                      <MapPin
-                        size={
-                          15
-                        }
-                      />
-
-                      {
-                        supplier.address
-                      }
-                    </p>
-                  )}
-                </div>
-
-                <div className="mt-5 border-t border-black/5 pt-4">
-
-                  <p className="mb-3 text-xs font-black uppercase tracking-wide text-black/35">
-                    Representantes
-                    comerciales
+                {supplier.address && (
+                  <p className="mt-2 text-sm text-black/45">
+                    {
+                      supplier.address
+                    }
                   </p>
-
-                  {(
-                    supplier.representatives ||
-                    []
-                  ).length ? (
-                    <div className="space-y-3">
-
-                      {supplier.representatives.map(
-                        (rep) => (
-                          <div
-                            className="rounded-2xl bg-cream p-3"
-                            key={
-                              rep.id
-                            }
-                          >
-                            <p className="font-black">
-                              {
-                                rep.name
-                              }
-                            </p>
-
-                            <p className="text-xs text-black/45">
-                              {rep.position ||
-                                'Representante'}
-                            </p>
-
-                            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs font-bold">
-
-                              {rep.phone && (
-                                <span>
-                                  {
-                                    rep.phone
-                                  }
-                                </span>
-                              )}
-
-                              {rep.email && (
-                                <span>
-                                  {
-                                    rep.email
-                                  }
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        )
-                      )}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-black/40">
-                      Sin representantes
-                      registrados.
-                    </p>
-                  )}
-                </div>
+                )}
               </article>
-            )
+            ),
           )}
         </section>
       ) : (
-        <EmptyState text="Todavía no hay proveedores registrados" />
+        <EmptyState text="Todavía no hay proveedores" />
       )}
 
-      {/* ===================================== */}
-      {/* MODAL REGISTRAR DOCUMENTO */}
-      {/* ===================================== */}
-
-      {purchaseForm && (
+      {form && (
         <Modal
-          title="Registrar boleta o factura"
-          onClose={() =>
-            setPurchaseForm(
-              null
-            )
-          }
+          title="Registrar compra"
+          onClose={() => {
+            setForm(
+              null,
+            );
+
+            setError(
+              '',
+            );
+          }}
         >
           <form
-            className="space-y-4"
+            className="space-y-5"
             onSubmit={
               submitPurchase
             }
           >
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="text-sm font-bold">
+                Proveedor
 
-            <label className="block text-sm font-bold">
-              Proveedor
-
-              <select
-                required
-                className="field mt-2"
-                value={
-                  purchaseForm.supplierId
-                }
-                onChange={(
-                  e
-                ) =>
-                  setPurchaseForm(
-                    {
-                      ...purchaseForm,
+                <select
+                  required
+                  className="field mt-2"
+                  value={
+                    form.supplierId
+                  }
+                  onChange={(
+                    e,
+                  ) =>
+                    setForm({
+                      ...form,
 
                       supplierId:
-                        e.target
+                        e
+                          .target
                           .value,
-                    }
-                  )
-                }
-              >
-                <option value="">
-                  Selecciona un
-                  proveedor
-                </option>
+                    })
+                  }
+                >
+                  <option value="">
+                    Selecciona
+                  </option>
 
-                {suppliers.map(
-                  (
-                    supplier
-                  ) => (
-                    <option
-                      key={
-                        supplier.id
-                      }
-                      value={
-                        supplier.id
-                      }
-                    >
-                      {
-                        supplier.businessName
-                      }
-                    </option>
-                  )
-                )}
-              </select>
-            </label>
-
-            {!suppliers.length && (
-              <p className="rounded-2xl bg-amber/15 p-3 text-sm font-bold text-[#8c5c00]">
-                Primero crea un
-                proveedor desde la
-                pestaña
-                “Proveedores y
-                representantes”.
-              </p>
-            )}
-
-            <div className="grid grid-cols-2 gap-4">
+                  {suppliers.map(
+                    (
+                      supplier,
+                    ) => (
+                      <option
+                        value={
+                          supplier.id
+                        }
+                        key={
+                          supplier.id
+                        }
+                      >
+                        {
+                          supplier.businessName
+                        }
+                      </option>
+                    ),
+                  )}
+                </select>
+              </label>
 
               <label className="text-sm font-bold">
-                Tipo de documento
+                Fecha
+
+                <input
+                  required
+                  type="date"
+                  className="field mt-2"
+                  value={
+                    form.date
+                  }
+                  onChange={(
+                    e,
+                  ) =>
+                    setForm({
+                      ...form,
+
+                      date:
+                        e
+                          .target
+                          .value,
+                    })
+                  }
+                />
+              </label>
+
+              <label className="text-sm font-bold">
+                Tipo de
+                comprobante
 
                 <select
                   className="field mt-2"
                   value={
-                    purchaseForm.documentType
+                    form.documentType
                   }
                   onChange={(
-                    e
+                    e,
                   ) =>
-                    setPurchaseForm(
-                      {
-                        ...purchaseForm,
+                    setForm({
+                      ...form,
 
-                        documentType:
-                          e
-                            .target
-                            .value,
-                      }
-                    )
+                      documentType:
+                        e
+                          .target
+                          .value,
+                    })
                   }
                 >
                   <option>
@@ -852,222 +859,487 @@ export default function PurchasesView({
                   </option>
 
                   <option>
-                    Nota de venta
-                  </option>
-
-                  <option>
-                    Guía / Otro
+                    Nota de
+                    venta
                   </option>
                 </select>
               </label>
 
               <label className="text-sm font-bold">
-                Número
+                N.º documento
 
                 <input
                   required
                   className="field mt-2"
                   placeholder="F001-000123"
                   value={
-                    purchaseForm.documentNumber
+                    form.documentNumber
                   }
                   onChange={(
-                    e
+                    e,
                   ) =>
-                    setPurchaseForm(
-                      {
-                        ...purchaseForm,
+                    setForm({
+                      ...form,
 
-                        documentNumber:
-                          e
-                            .target
-                            .value,
-                      }
-                    )
-                  }
-                />
-              </label>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-
-              <label className="text-sm font-bold">
-                Fecha de emisión
-
-                <input
-                  required
-                  type="date"
-                  className="field mt-2"
-                  value={
-                    purchaseForm.date
-                  }
-                  onChange={(
-                    e
-                  ) =>
-                    setPurchaseForm(
-                      {
-                        ...purchaseForm,
-
-                        date:
-                          e
-                            .target
-                            .value,
-                      }
-                    )
-                  }
-                />
-              </label>
-
-              <label className="text-sm font-bold">
-                Cantidad de
-                artículos
-
-                <input
-                  min="0"
-                  type="number"
-                  className="field mt-2"
-                  value={
-                    purchaseForm.items
-                  }
-                  onChange={(
-                    e
-                  ) =>
-                    setPurchaseForm(
-                      {
-                        ...purchaseForm,
-
-                        items:
-                          e
-                            .target
-                            .value,
-                      }
-                    )
-                  }
-                />
-              </label>
-            </div>
-
-            <label className="block text-sm font-bold">
-              Total del documento
-
-              <input
-                required
-                min="0"
-                step="0.01"
-                type="number"
-                className="field mt-2"
-                value={
-                  purchaseForm.total
-                }
-                onChange={(
-                  e
-                ) =>
-                  setPurchaseForm(
-                    {
-                      ...purchaseForm,
-
-                      total:
+                      documentNumber:
                         e
                           .target
                           .value,
-                    }
-                  )
-                }
-              />
-            </label>
+                    })
+                  }
+                />
+              </label>
+            </div>
 
-            {/* IMAGEN */}
+            <div>
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="font-black">
+                    Productos
+                    comprados
+                  </h3>
 
-            <label className="block text-sm font-bold">
-              Foto de la boleta o
-              factura
-
-              <div className="mt-2 rounded-2xl border border-dashed border-black/15 bg-white p-4">
-
-                <div className="flex items-center gap-3">
-
-                  <ImageIcon className="text-forest" />
-
-                  <input
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    onChange={(
-                      e
-                    ) =>
-                      readDocument(
-                        e.target
-                          .files?.[0]
-                      )
-                    }
-                  />
+                  <p className="text-xs text-black/40">
+                    Cada fila
+                    ingresará
+                    stock al
+                    inventario.
+                  </p>
                 </div>
 
-                <p className="mt-2 text-xs text-black/40">
-                  JPG, PNG o WEBP ·
-                  máximo 1.5 MB.
-                </p>
+                <button
+                  type="button"
+                  className="text-sm font-black text-forest"
+                  onClick={() =>
+                    setForm({
+                      ...form,
+
+                      detail: [
+                        ...form.detail,
+
+                        newLine(
+                          products[0],
+                        ),
+                      ],
+                    })
+                  }
+                >
+                  + Agregar
+                  producto
+                </button>
               </div>
-            </label>
 
-            {/* VISTA PREVIA */}
+              <div className="space-y-3">
+                {form.detail.map(
+                  (
+                    line,
+                    index,
+                  ) => (
+                    <div
+                      className="rounded-2xl bg-cream p-4"
+                      key={
+                        line.id
+                      }
+                    >
+                      <div className="flex justify-between">
+                        <strong>
+                          Producto{' '}
+                          {index +
+                            1}
+                        </strong>
 
-            {purchaseForm.documentDataUrl && (
-              <img
-                src={
-                  purchaseForm.documentDataUrl
-                }
-                alt="Vista previa del documento"
-                className="max-h-64 w-full rounded-2xl border border-black/5 object-contain"
-              />
+                        {form
+                          .detail
+                          .length >
+                          1 && (
+                          <button
+                            type="button"
+                            className="text-coral"
+                            onClick={() =>
+                              setForm({
+                                ...form,
+
+                                detail:
+                                  form.detail.filter(
+                                    (
+                                      item,
+                                    ) =>
+                                      item.id !==
+                                      line.id,
+                                  ),
+                              })
+                            }
+                          >
+                            <Trash2
+                              size={
+                                17
+                              }
+                            />
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                        <label className="text-xs font-bold">
+                          Producto
+
+                          <select
+                            required
+                            className="field mt-1"
+                            value={
+                              line.productId
+                            }
+                            onChange={(
+                              e,
+                            ) =>
+                              updateLine(
+                                line.id,
+                                'productId',
+                                e
+                                  .target
+                                  .value,
+                              )
+                            }
+                          >
+                            <option value="">
+                              Selecciona
+                            </option>
+
+                            {products
+                              .filter(
+                                (
+                                  product,
+                                ) =>
+                                  product.active !==
+                                  false,
+                              )
+                              .map(
+                                (
+                                  product,
+                                ) => (
+                                  <option
+                                    key={
+                                      product.id
+                                    }
+                                    value={
+                                      product.id
+                                    }
+                                  >
+                                    {
+                                      product.name
+                                    }
+                                  </option>
+                                ),
+                              )}
+                          </select>
+                        </label>
+
+                        <label className="text-xs font-bold">
+                          Paquetes /
+                          presentaciones
+
+                          <input
+                            required
+                            min="0.001"
+                            step="0.001"
+                            type="number"
+                            className="field mt-1"
+                            value={
+                              line.packages
+                            }
+                            onChange={(
+                              e,
+                            ) =>
+                              updateLine(
+                                line.id,
+                                'packages',
+                                e
+                                  .target
+                                  .value,
+                              )
+                            }
+                          />
+                        </label>
+
+                        <label className="text-xs font-bold">
+                          Unidades
+                          por
+                          presentación
+
+                          <input
+                            required
+                            min="0.001"
+                            step="0.001"
+                            type="number"
+                            className="field mt-1"
+                            value={
+                              line.contentQuantity
+                            }
+                            onChange={(
+                              e,
+                            ) =>
+                              updateLine(
+                                line.id,
+                                'contentQuantity',
+                                e
+                                  .target
+                                  .value,
+                              )
+                            }
+                          />
+                        </label>
+
+                        <label className="text-xs font-bold">
+                          Costo por
+                          presentación
+
+                          <input
+                            required
+                            min="0.01"
+                            step="0.01"
+                            type="number"
+                            className="field mt-1"
+                            value={
+                              line.purchasePrice
+                            }
+                            onChange={(
+                              e,
+                            ) =>
+                              updateLine(
+                                line.id,
+                                'purchasePrice',
+                                e
+                                  .target
+                                  .value,
+                              )
+                            }
+                          />
+                        </label>
+
+                        <label className="text-xs font-bold">
+                          Lote
+
+                          <input
+                            className="field mt-1"
+                            value={
+                              line.lot
+                            }
+                            onChange={(
+                              e,
+                            ) =>
+                              updateLine(
+                                line.id,
+                                'lot',
+                                e
+                                  .target
+                                  .value,
+                              )
+                            }
+                          />
+                        </label>
+
+                        <label className="text-xs font-bold">
+                          Vencimiento
+
+                          <input
+                            type="date"
+                            className="field mt-1"
+                            value={
+                              line.expirationDate
+                            }
+                            onChange={(
+                              e,
+                            ) =>
+                              updateLine(
+                                line.id,
+                                'expirationDate',
+                                e
+                                  .target
+                                  .value,
+                              )
+                            }
+                          />
+                        </label>
+                      </div>
+                    </div>
+                  ),
+                )}
+              </div>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="text-sm font-bold">
+                Forma de pago
+
+                <select
+                  className="field mt-2"
+                  value={
+                    form.paymentMethod
+                  }
+                  onChange={(
+                    e,
+                  ) => {
+                    const paymentMethod =
+                      e
+                        .target
+                        .value;
+
+                    setForm({
+                      ...form,
+
+                      paymentMethod,
+
+                      paymentStatus:
+                        paymentMethod ===
+                        'Efectivo'
+                          ? 'Pagado'
+                          : 'Pendiente',
+                    });
+                  }}
+                >
+                  <option>
+                    Efectivo
+                  </option>
+
+                  <option>
+                    Crédito
+                    proveedor
+                  </option>
+                </select>
+              </label>
+
+              <label className="text-sm font-bold">
+                Estado
+
+                <select
+                  className="field mt-2"
+                  value={
+                    form.paymentStatus
+                  }
+                  disabled={
+                    form.paymentMethod ===
+                    'Efectivo'
+                  }
+                  onChange={(
+                    e,
+                  ) =>
+                    setForm({
+                      ...form,
+
+                      paymentStatus:
+                        e
+                          .target
+                          .value,
+                    })
+                  }
+                >
+                  <option>
+                    Pagado
+                  </option>
+
+                  <option>
+                    Pendiente
+                  </option>
+                </select>
+              </label>
+            </div>
+
+            <div className="rounded-2xl bg-mint p-4">
+              <div className="flex justify-between">
+                <span>
+                  Unidades a
+                  ingresar
+                </span>
+
+                <strong>
+                  {Number(
+                    units.toFixed(
+                      3,
+                    ),
+                  )}
+                </strong>
+              </div>
+
+              <div className="mt-2 flex justify-between text-lg">
+                <span className="font-black">
+                  Total
+                </span>
+
+                <strong>
+                  {formatMoney(
+                    total,
+                  )}
+                </strong>
+              </div>
+            </div>
+
+            {form.paymentMethod ===
+              'Efectivo' && (
+              <div className="rounded-xl bg-amber/10 p-3 text-xs">
+                <strong>
+                  Importante:
+                </strong>{' '}
+                el total se
+                descontará
+                automáticamente
+                de la caja
+                abierta.
+              </div>
+            )}
+
+            {form.paymentMethod ===
+              'Crédito proveedor' && (
+              <div className="rounded-xl bg-mint p-3 text-xs">
+                El stock
+                ingresará al
+                inventario,
+                pero no se
+                descontará
+                dinero de caja
+                porque la compra
+                quedará
+                pendiente de
+                pago.
+              </div>
             )}
 
             <label className="block text-sm font-bold">
-              Observaciones
+              Notas
 
               <textarea
-                className="field mt-2 min-h-24"
-                placeholder="Productos principales, condición de pago, crédito, etc."
+                className="field mt-2"
+                rows="2"
                 value={
-                  purchaseForm.notes
+                  form.notes
                 }
                 onChange={(
-                  e
+                  e,
                 ) =>
-                  setPurchaseForm(
-                    {
-                      ...purchaseForm,
+                  setForm({
+                    ...form,
 
-                      notes:
-                        e
-                          .target
-                          .value,
-                    }
-                  )
+                    notes:
+                      e
+                        .target
+                        .value,
+                  })
                 }
               />
             </label>
 
             {error && (
-              <p className="text-sm font-bold text-coral">
+              <p className="rounded-xl bg-coral/10 p-3 text-sm font-bold text-coral">
                 {error}
               </p>
             )}
 
-            <button
-              className="btn-primary w-full"
-              disabled={
-                !suppliers.length
-              }
-            >
-              Guardar documento
+            <button className="btn-primary w-full">
+              Registrar
+              compra
             </button>
           </form>
         </Modal>
       )}
-
-      {/* ===================================== */}
-      {/* MODAL PROVEEDOR */}
-      {/* ===================================== */}
 
       {supplierForm && (
         <Modal
@@ -1076,11 +1348,15 @@ export default function PurchasesView({
               ? 'Editar proveedor'
               : 'Nuevo proveedor'
           }
-          onClose={() =>
+          onClose={() => {
             setSupplierForm(
-              null
-            )
-          }
+              null,
+            );
+
+            setError(
+              '',
+            );
+          }}
         >
           <form
             className="space-y-4"
@@ -1088,9 +1364,8 @@ export default function PurchasesView({
               submitSupplier
             }
           >
-
             <label className="block text-sm font-bold">
-              Nombre o razón social
+              Razón social
 
               <input
                 required
@@ -1099,48 +1374,41 @@ export default function PurchasesView({
                   supplierForm.businessName
                 }
                 onChange={(
-                  e
+                  e,
                 ) =>
-                  setSupplierForm(
-                    {
-                      ...supplierForm,
+                  setSupplierForm({
+                    ...supplierForm,
 
-                      businessName:
-                        e
-                          .target
-                          .value,
-                    }
-                  )
+                    businessName:
+                      e
+                        .target
+                        .value,
+                  })
                 }
               />
             </label>
 
             <div className="grid grid-cols-2 gap-4">
-
               <label className="text-sm font-bold">
                 RUC
 
                 <input
                   className="field mt-2"
-                  maxLength={
-                    11
-                  }
                   value={
-                    supplierForm.ruc
+                    supplierForm.ruc ||
+                    ''
                   }
                   onChange={(
-                    e
+                    e,
                   ) =>
-                    setSupplierForm(
-                      {
-                        ...supplierForm,
+                    setSupplierForm({
+                      ...supplierForm,
 
-                        ruc:
-                          e
-                            .target
-                            .value,
-                      }
-                    )
+                      ruc:
+                        e
+                          .target
+                          .value,
+                    })
                   }
                 />
               </label>
@@ -1151,21 +1419,20 @@ export default function PurchasesView({
                 <input
                   className="field mt-2"
                   value={
-                    supplierForm.phone
+                    supplierForm.phone ||
+                    ''
                   }
                   onChange={(
-                    e
+                    e,
                   ) =>
-                    setSupplierForm(
-                      {
-                        ...supplierForm,
+                    setSupplierForm({
+                      ...supplierForm,
 
-                        phone:
-                          e
-                            .target
-                            .value,
-                      }
-                    )
+                      phone:
+                        e
+                          .target
+                          .value,
+                    })
                   }
                 />
               </label>
@@ -1178,21 +1445,20 @@ export default function PurchasesView({
                 type="email"
                 className="field mt-2"
                 value={
-                  supplierForm.email
+                  supplierForm.email ||
+                  ''
                 }
                 onChange={(
-                  e
+                  e,
                 ) =>
-                  setSupplierForm(
-                    {
-                      ...supplierForm,
+                  setSupplierForm({
+                    ...supplierForm,
 
-                      email:
-                        e
-                          .target
-                          .value,
-                    }
-                  )
+                    email:
+                      e
+                        .target
+                        .value,
+                  })
                 }
               />
             </label>
@@ -1203,359 +1469,60 @@ export default function PurchasesView({
               <input
                 className="field mt-2"
                 value={
-                  supplierForm.address
+                  supplierForm.address ||
+                  ''
                 }
                 onChange={(
-                  e
+                  e,
                 ) =>
-                  setSupplierForm(
-                    {
-                      ...supplierForm,
+                  setSupplierForm({
+                    ...supplierForm,
 
-                      address:
-                        e
-                          .target
-                          .value,
-                    }
-                  )
+                    address:
+                      e
+                        .target
+                        .value,
+                  })
                 }
               />
             </label>
 
-            {/* REPRESENTANTES */}
-
-            <div className="rounded-3xl border border-black/10 p-4">
-
-              <div className="flex items-center justify-between gap-3">
-
-                <div>
-                  <p className="font-black">
-                    Representantes /
-                    vendedores
-                  </p>
-
-                  <p className="text-xs text-black/40">
-                    Puedes guardar
-                    varios contactos
-                    para el mismo
-                    proveedor.
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={
-                    addRepresentative
-                  }
-                >
-                  <Plus
-                    size={16}
-                  />
-
-                  Añadir
-                </button>
-              </div>
-
-              <div className="mt-4 space-y-4">
-
-                {(
-                  supplierForm.representatives ||
-                  []
-                ).map(
-                  (
-                    rep,
-                    index
-                  ) => (
-                    <div
-                      className="rounded-2xl bg-cream p-4"
-                      key={
-                        rep.id
-                      }
-                    >
-                      <div className="mb-3 flex items-center justify-between">
-
-                        <div className="flex items-center gap-2 font-black">
-                          <UserRound
-                            size={
-                              17
-                            }
-                          />
-
-                          Representante{' '}
-                          {index +
-                            1}
-                        </div>
-
-                        <button
-                          type="button"
-                          className="text-coral"
-                          onClick={() =>
-                            removeRepresentative(
-                              rep.id
-                            )
-                          }
-                        >
-                          <Trash2
-                            size={
-                              17
-                            }
-                          />
-                        </button>
-                      </div>
-
-                      <div className="grid gap-3 sm:grid-cols-2">
-
-                        <input
-                          className="field"
-                          placeholder="Nombre completo"
-                          value={
-                            rep.name
-                          }
-                          onChange={(
-                            e
-                          ) =>
-                            updateRepresentative(
-                              rep.id,
-                              'name',
-                              e
-                                .target
-                                .value
-                            )
-                          }
-                        />
-
-                        <input
-                          className="field"
-                          placeholder="Cargo / vendedor / preventista"
-                          value={
-                            rep.position
-                          }
-                          onChange={(
-                            e
-                          ) =>
-                            updateRepresentative(
-                              rep.id,
-                              'position',
-                              e
-                                .target
-                                .value
-                            )
-                          }
-                        />
-
-                        <input
-                          className="field"
-                          placeholder="Celular"
-                          value={
-                            rep.phone
-                          }
-                          onChange={(
-                            e
-                          ) =>
-                            updateRepresentative(
-                              rep.id,
-                              'phone',
-                              e
-                                .target
-                                .value
-                            )
-                          }
-                        />
-
-                        <input
-                          type="email"
-                          className="field"
-                          placeholder="Correo"
-                          value={
-                            rep.email
-                          }
-                          onChange={(
-                            e
-                          ) =>
-                            updateRepresentative(
-                              rep.id,
-                              'email',
-                              e
-                                .target
-                                .value
-                            )
-                          }
-                        />
-                      </div>
-
-                      <input
-                        className="field mt-3"
-                        placeholder="Notas: día de visita, zona, horario, etc."
-                        value={
-                          rep.notes
-                        }
-                        onChange={(
-                          e
-                        ) =>
-                          updateRepresentative(
-                            rep.id,
-                            'notes',
-                            e
-                              .target
-                              .value
-                          )
-                        }
-                      />
-                    </div>
-                  )
-                )}
-              </div>
-            </div>
-
             <label className="block text-sm font-bold">
-              Notas del proveedor
+              Notas
 
               <textarea
-                className="field mt-2 min-h-20"
+                rows="2"
+                className="field mt-2"
                 value={
-                  supplierForm.notes
+                  supplierForm.notes ||
+                  ''
                 }
                 onChange={(
-                  e
+                  e,
                 ) =>
-                  setSupplierForm(
-                    {
-                      ...supplierForm,
+                  setSupplierForm({
+                    ...supplierForm,
 
-                      notes:
-                        e
-                          .target
-                          .value,
-                    }
-                  )
+                    notes:
+                      e
+                        .target
+                        .value,
+                  })
                 }
               />
             </label>
 
             {error && (
-              <p className="text-sm font-bold text-coral">
+              <p className="rounded-xl bg-coral/10 p-3 text-sm font-bold text-coral">
                 {error}
               </p>
             )}
 
             <button className="btn-primary w-full">
-              Guardar proveedor
+              Guardar
+              proveedor
             </button>
           </form>
-        </Modal>
-      )}
-
-      {/* ===================================== */}
-      {/* VER DETALLE DOCUMENTO */}
-      {/* ===================================== */}
-
-      {detail && (
-        <Modal
-          title={`${
-            detail.documentType ||
-            'Documento'
-          } ${
-            detail.documentNumber ||
-            ''
-          }`}
-          onClose={() =>
-            setDetail(null)
-          }
-        >
-          <div className="space-y-5">
-
-            <div className="grid grid-cols-2 gap-3 rounded-2xl bg-cream p-4 text-sm">
-
-              <div>
-                <p className="text-black/40">
-                  Proveedor
-                </p>
-
-                <strong>
-                  {supplierById.get(
-                    detail.supplierId
-                  )
-                    ?.businessName ||
-                    detail.supplier}
-                </strong>
-              </div>
-
-              <div>
-                <p className="text-black/40">
-                  Fecha
-                </p>
-
-                <strong>
-                  {formatDate(
-                    detail.date
-                  )}
-                </strong>
-              </div>
-
-              <div>
-                <p className="text-black/40">
-                  Total
-                </p>
-
-                <strong>
-                  {formatMoney(
-                    detail.total
-                  )}
-                </strong>
-              </div>
-
-              <div>
-                <p className="text-black/40">
-                  Artículos
-                </p>
-
-                <strong>
-                  {detail.items ||
-                    0}
-                </strong>
-              </div>
-            </div>
-
-            {detail.notes && (
-              <div>
-                <p className="text-sm font-black">
-                  Observaciones
-                </p>
-
-                <p className="mt-1 text-sm text-black/60">
-                  {
-                    detail.notes
-                  }
-                </p>
-              </div>
-            )}
-
-            {detail.documentDataUrl ? (
-              <div>
-                <p className="mb-2 text-sm font-black">
-                  Imagen del
-                  documento
-                </p>
-
-                <img
-                  src={
-                    detail.documentDataUrl
-                  }
-                  alt={`${detail.documentType} ${detail.documentNumber}`}
-                  className="max-h-[60vh] w-full rounded-2xl border border-black/5 object-contain"
-                />
-              </div>
-            ) : (
-              <div className="rounded-2xl border border-dashed border-black/10 p-6 text-center text-sm text-black/40">
-
-                <FileText className="mx-auto mb-2" />
-
-                No se adjuntó una
-                imagen.
-              </div>
-            )}
-          </div>
         </Modal>
       )}
     </>
