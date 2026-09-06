@@ -1,385 +1,1318 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import {
+  useEffect,
+  useState,
+} from "react";
 
 import Login from "../components/Login";
+
 import AppShell from "../components/AppShell";
 
 import DashboardView from "../views/DashboardView";
+
 import PosView from "../views/PosView";
+
+import ClientsView from "../views/ClientsView";
+
 import CashView from "../views/CashView";
+
 import ProductsView from "../views/ProductsView";
+
 import CategoriesView from "../views/CategoriesView";
+
 import BrandsView from "../views/BrandsView";
+
 import InventoryView from "../views/InventoryView";
+
 import PurchasesView from "../views/PurchasesView";
+
 import ExpensesView from "../views/ExpensesView";
+
 import ReportsView from "../views/ReportsView";
+
 import SettingsView from "../views/SettingsView";
 
-import { api, getAuthToken, setAuthToken } from "../lib/api";
+import {
+  api,
+  getAuthToken,
+  setAuthToken,
+} from "../lib/api";
 
 export default function Home() {
-  const [user, setUser] = useState(null);
+  const [
+    user,
+    setUser,
+  ] =
+    useState(
+      null,
+    );
 
-  const [active, setActive] = useState("dashboard");
+  const [
+    active,
+    setActive,
+  ] =
+    useState(
+      "dashboard",
+    );
 
-  const [online, setOnline] = useState(false);
+  const [
+    online,
+    setOnline,
+  ] =
+    useState(
+      false,
+    );
 
-  const [checkingSession, setCheckingSession] = useState(true);
+  const [
+    checkingSession,
+    setCheckingSession,
+  ] =
+    useState(
+      true,
+    );
 
-  const [products, setProducts] = useState([]);
+  const [
+    sessionMessage,
+    setSessionMessage,
+  ] =
+    useState(
+      "",
+    );
 
-  const [categories, setCategories] = useState([]);
+  const [
+    products,
+    setProducts,
+  ] =
+    useState(
+      [],
+    );
 
-  const [brands, setBrands] = useState([]);
+  const [
+    categories,
+    setCategories,
+  ] =
+    useState(
+      [],
+    );
 
-  const [sales, setSales] = useState([]);
+  const [
+    brands,
+    setBrands,
+  ] =
+    useState(
+      [],
+    );
 
-  const [expenses, setExpenses] = useState([]);
+  const [
+    sales,
+    setSales,
+  ] =
+    useState(
+      [],
+    );
 
-  const [purchases, setPurchases] = useState([]);
+  const [
+    customers,
+    setCustomers,
+  ] =
+    useState(
+      [],
+    );
 
-  const [suppliers, setSuppliers] = useState([]);
+  const [
+    expenses,
+    setExpenses,
+  ] =
+    useState(
+      [],
+    );
 
-  const [cash, setCash] = useState({
-    isOpen: false,
-    balance: 0,
-    movements: [],
-  });
+  const [
+    purchases,
+    setPurchases,
+  ] =
+    useState(
+      [],
+    );
 
-  const loadData = async (currentUser) => {
-    const common = await Promise.all([
-      api.products(),
-      api.categories(),
-      api.brands(),
-      api.sales(),
-      api.cash(),
-    ]);
+  const [
+    suppliers,
+    setSuppliers,
+  ] =
+    useState(
+      [],
+    );
 
-    setProducts(common[0].data);
+  const [
+    cash,
+    setCash,
+  ] =
+    useState({
+      isOpen:
+        false,
 
-    setCategories(common[1].data);
+      balance:
+        0,
 
-    setBrands(common[2].data);
+      movements:
+        [],
+    });
 
-    setSales(common[3].data);
+  /*
+   * ==========================================
+   * LIMPIAR ESTADO LOCAL
+   * ==========================================
+   */
 
-    setCash(common[4].data);
+  const clearApplicationState =
+    () => {
+      setProducts(
+        [],
+      );
 
-    if (currentUser.role === "Administrador") {
-      const admin = await Promise.all([
-        api.expenses(),
-        api.purchases(),
-        api.suppliers(),
-      ]);
+      setCategories(
+        [],
+      );
 
-      setExpenses(admin[0].data);
+      setBrands(
+        [],
+      );
 
-      setPurchases(admin[1].data);
+      setSales(
+        [],
+      );
 
-      setSuppliers(admin[2].data);
-    }
+      setCustomers(
+        [],
+      );
 
-    setOnline(true);
-  };
+      setExpenses(
+        [],
+      );
 
-  useEffect(() => {
-    const restore = async () => {
+      setPurchases(
+        [],
+      );
+
+      setSuppliers(
+        [],
+      );
+
+      setCash({
+        isOpen:
+          false,
+
+        balance:
+          0,
+
+        movements:
+          [],
+      });
+    };
+
+  /*
+   * ==========================================
+   * DETECTAR 401 GLOBAL
+   * ==========================================
+   */
+
+  useEffect(
+    () => {
+      const unauthorized =
+        (
+          event,
+        ) => {
+          setAuthToken(
+            "",
+          );
+
+          setUser(
+            null,
+          );
+
+          setActive(
+            "dashboard",
+          );
+
+          clearApplicationState();
+
+          setSessionMessage(
+            event.detail
+              ?.message ||
+              "Tu sesión terminó. Inicia sesión nuevamente.",
+          );
+        };
+
+      window.addEventListener(
+        "minimarket:unauthorized",
+
+        unauthorized,
+      );
+
+      return () => {
+        window.removeEventListener(
+          "minimarket:unauthorized",
+
+          unauthorized,
+        );
+      };
+    },
+    [],
+  );
+
+  /*
+   * ==========================================
+   * CARGAR DATOS
+   * ==========================================
+   */
+
+  const loadData =
+    async (
+      currentUser,
+    ) => {
+      const common =
+        await Promise.all([
+          api.products(),
+          api.categories(),
+          api.brands(),
+          api.sales(),
+          api.cash(),
+          api.customers(),
+        ]);
+
+      setProducts(
+        common[
+          0
+        ].data,
+      );
+
+      setCategories(
+        common[
+          1
+        ].data,
+      );
+
+      setBrands(
+        common[
+          2
+        ].data,
+      );
+
+      setSales(
+        common[
+          3
+        ].data,
+      );
+
+      setCash(
+        common[
+          4
+        ].data,
+      );
+
+      setCustomers(
+        common[
+          5
+        ].data,
+      );
+
+      if (
+        currentUser.role ===
+        "Administrador"
+      ) {
+        const admin =
+          await Promise.all([
+            api.expenses(),
+            api.purchases(),
+            api.suppliers(),
+          ]);
+
+        setExpenses(
+          admin[
+            0
+          ].data,
+        );
+
+        setPurchases(
+          admin[
+            1
+          ].data,
+        );
+
+        setSuppliers(
+          admin[
+            2
+          ].data,
+        );
+      }
+
+      setOnline(
+        true,
+      );
+    };
+
+  /*
+   * ==========================================
+   * RESTAURAR SESIÓN
+   * ==========================================
+   */
+
+  useEffect(
+    () => {
+      const restore =
+        async () => {
+          try {
+            await api.health();
+
+            setOnline(
+              true,
+            );
+
+            const token =
+              getAuthToken();
+
+            if (
+              !token
+            ) {
+              return;
+            }
+
+            const me =
+              await api.me();
+
+            setUser(
+              me.data,
+            );
+
+            setActive(
+              me.data.role ===
+                "Vendedora"
+                ? "pos"
+                : "dashboard",
+            );
+
+            await loadData(
+              me.data,
+            );
+          } catch (
+            error
+          ) {
+            setAuthToken(
+              "",
+            );
+
+            setUser(
+              null,
+            );
+
+            clearApplicationState();
+
+            /*
+             * Si health también falla,
+             * significa que backend
+             * está apagado.
+             */
+            try {
+              await api.health();
+
+              setOnline(
+                true,
+              );
+            } catch {
+              setOnline(
+                false,
+              );
+            }
+          } finally {
+            setCheckingSession(
+              false,
+            );
+          }
+        };
+
+      restore();
+    },
+    [],
+  );
+
+  /*
+   * ==========================================
+   * LOGIN
+   * ==========================================
+   */
+
+  const login =
+    async (
+      credentials,
+    ) => {
+      setSessionMessage(
+        "",
+      );
+
+      const result =
+        await api.login({
+          username:
+            credentials.username
+              .trim()
+              .toLowerCase(),
+
+          password:
+            credentials.password,
+        });
+
+      setAuthToken(
+        result.data
+          .token,
+      );
+
+      const loggedUser =
+        result.data
+          .user;
+
       try {
-        await api.health();
+        /*
+         * Primero comprobamos
+         * que el token recién
+         * creado realmente
+         * funciona.
+         */
+        const me =
+          await api.me();
 
-        setOnline(true);
+        setUser(
+          me.data ||
+            loggedUser,
+        );
 
-        if (!getAuthToken()) {
-          return;
-        }
+        setActive(
+          loggedUser.role ===
+            "Vendedora"
+            ? "pos"
+            : "dashboard",
+        );
 
-        const me = await api.me();
+        await loadData(
+          loggedUser,
+        );
 
-        setUser(me.data);
+        setOnline(
+          true,
+        );
+      } catch (
+        error
+      ) {
+        setAuthToken(
+          "",
+        );
 
-        setActive(me.data.role === "Vendedora" ? "pos" : "dashboard");
+        setUser(
+          null,
+        );
 
-        await loadData(me.data);
-      } catch {
-        setAuthToken("");
+        clearApplicationState();
 
-        setUser(null);
-
-        setOnline(false);
-      } finally {
-        setCheckingSession(false);
+        throw error;
       }
     };
 
-    restore();
-  }, []);
+  /*
+   * ==========================================
+   * REFRESH
+   * ==========================================
+   */
 
-  const login = async (credentials) => {
-    const result = await api.login({
-      username: credentials.username.trim().toLowerCase(),
+  const refreshProducts =
+    async () => {
+      const result =
+        await api.products();
 
-      password: credentials.password,
-    });
+      setProducts(
+        result.data,
+      );
+    };
 
-    setAuthToken(result.data.token);
+  const refreshSales =
+    async () => {
+      const result =
+        await api.sales();
 
-    const loggedUser = result.data.user;
+      setSales(
+        result.data,
+      );
+    };
 
-    setUser(loggedUser);
+  const refreshCash =
+    async () => {
+      const result =
+        await api.cash();
 
-    setActive(loggedUser.role === "Vendedora" ? "pos" : "dashboard");
+      setCash(
+        result.data,
+      );
+    };
 
-    try {
-      await loadData(loggedUser);
-    } catch (error) {
-      setAuthToken("");
+  const refreshPurchases =
+    async () => {
+      const result =
+        await api.purchases();
 
-      setUser(null);
+      setPurchases(
+        result.data,
+      );
+    };
 
-      throw error;
-    }
-  };
+  const refreshExpenses =
+    async () => {
+      const result =
+        await api.expenses();
 
-  const refreshProducts = async () => {
-    const result = await api.products();
+      setExpenses(
+        result.data,
+      );
+    };
 
-    setProducts(result.data);
-  };
+  const refreshCustomers =
+    async () => {
+      const result =
+        await api.customers();
 
-  const refreshSales = async () => {
-    const result = await api.sales();
+      setCustomers(
+        result.data,
+      );
+    };
 
-    setSales(result.data);
-  };
+  /*
+   * ==========================================
+   * PRODUCTOS
+   * ==========================================
+   */
 
-  const refreshCash = async () => {
-    const result = await api.cash();
+  const saveProduct =
+    async (
+      product,
+    ) => {
+      const result =
+        product.id
+          ? await api.updateProduct(
+              product.id,
+              product,
+            )
+          : await api.createProduct(
+              product,
+            );
 
-    setCash(result.data);
-  };
+      await refreshProducts();
 
-  const refreshPurchases = async () => {
-    const result = await api.purchases();
+      return result.data;
+    };
 
-    setPurchases(result.data);
-  };
+  /*
+   * ==========================================
+   * CATÁLOGOS
+   * ==========================================
+   */
 
-  const refreshExpenses = async () => {
-    const result = await api.expenses();
+  const saveCatalog =
+    async (
+      type,
+      item,
+    ) => {
+      const create =
+        type ===
+        "category"
+          ? api.createCategory
+          : api.createBrand;
 
-    setExpenses(result.data);
-  };
+      const update =
+        type ===
+        "category"
+          ? api.updateCategory
+          : api.updateBrand;
 
-  const saveProduct = async (product) => {
-    const result = product.id
-      ? await api.updateProduct(product.id, product)
-      : await api.createProduct(product);
+      const result =
+        item.id
+          ? await update(
+              item.id,
+              item,
+            )
+          : await create(
+              item,
+            );
 
-    await refreshProducts();
+      if (
+        type ===
+        "category"
+      ) {
+        const data =
+          await api.categories();
 
-    return result.data;
-  };
+        setCategories(
+          data.data,
+        );
+      } else {
+        const data =
+          await api.brands();
 
-  const saveCatalog = async (type, item) => {
-    const create = type === "category" ? api.createCategory : api.createBrand;
+        setBrands(
+          data.data,
+        );
+      }
 
-    const update = type === "category" ? api.updateCategory : api.updateBrand;
+      return result.data;
+    };
 
-    const result = item.id ? await update(item.id, item) : await create(item);
+  /*
+   * ==========================================
+   * VENTAS
+   * ==========================================
+   */
 
-    if (type === "category") {
-      const data = await api.categories();
+  const checkout =
+    async (
+      payload,
+    ) => {
+      const result =
+        await api.createSale(
+          payload,
+        );
 
-      setCategories(data.data);
-    } else {
-      const data = await api.brands();
+      await Promise.all([
+        refreshProducts(),
+        refreshSales(),
+        refreshCash(),
+      ]);
 
-      setBrands(data.data);
-    }
+      return result.data;
+    };
 
-    return result.data;
-  };
+  /*
+   * ==========================================
+   * INVENTARIO
+   * ==========================================
+   */
 
-  const checkout = async (payload) => {
-    const result = await api.createSale(payload);
+  const adjust =
+    async (
+      payload,
+    ) => {
+      await api.adjustStock(
+        payload,
+      );
 
-    await Promise.all([refreshProducts(), refreshSales(), refreshCash()]);
+      await refreshProducts();
+    };
 
-    return result.data;
-  };
+  /*
+   * ==========================================
+   * GASTOS
+   * ==========================================
+   */
 
-  const adjust = async (payload) => {
-    await api.adjustStock(payload);
+  const saveExpense =
+    async (
+      expense,
+    ) => {
+      const result =
+        await api.createExpense(
+          expense,
+        );
 
-    await refreshProducts();
-  };
+      await Promise.all([
+        refreshExpenses(),
+        refreshCash(),
+      ]);
 
-  const saveExpense = async (expense) => {
-    const result = await api.createExpense(expense);
+      return result.data;
+    };
 
-    await Promise.all([refreshExpenses(), refreshCash()]);
+  /*
+   * ==========================================
+   * COMPRAS
+   * ==========================================
+   */
 
-    return result.data;
-  };
+  const savePurchase =
+    async (
+      purchase,
+    ) => {
+      const result =
+        await api.createPurchase(
+          purchase,
+        );
 
-  const savePurchase = async (purchase) => {
-    const result = await api.createPurchase(purchase);
+      await Promise.all([
+        refreshPurchases(),
+        refreshProducts(),
+        refreshCash(),
+      ]);
 
-    await Promise.all([refreshPurchases(), refreshProducts(), refreshCash()]);
+      return result.data;
+    };
 
-    return result.data;
-  };
+  const voidPurchase =
+    async (
+      id,
+      reason,
+    ) => {
+      const result =
+        await api.voidPurchase(
+          id,
+          reason,
+        );
 
-  const saveSupplier = async (supplier) => {
-    const result = supplier.id
-      ? await api.updateSupplier(supplier.id, supplier)
-      : await api.createSupplier(supplier);
+      await Promise.all([
+        refreshPurchases(),
+        refreshProducts(),
+        refreshCash(),
+      ]);
 
-    const data = await api.suppliers();
+      return result.data;
+    };
 
-    setSuppliers(data.data);
+  /*
+   * ==========================================
+   * PROVEEDORES
+   * ==========================================
+   */
 
-    return result.data;
-  };
+  const saveSupplier =
+    async (
+      supplier,
+    ) => {
+      const result =
+        supplier.id
+          ? await api.updateSupplier(
+              supplier.id,
+              supplier,
+            )
+          : await api.createSupplier(
+              supplier,
+            );
 
-  const saveCashMovement = async (movement) => {
-    const result = await api.createCashMovement(movement);
+      const data =
+        await api.suppliers();
 
-    await refreshCash();
+      setSuppliers(
+        data.data,
+      );
 
-    return result.data;
-  };
+      return result.data;
+    };
 
-  const openCash = async (amount) => {
-    await api.openCash(amount);
+  /*
+   * ==========================================
+   * CAJA
+   * ==========================================
+   */
 
-    await refreshCash();
-  };
+  const saveCashMovement =
+    async (
+      movement,
+    ) => {
+      const result =
+        await api.createCashMovement(
+          movement,
+        );
 
-  const closeCash = async (amount) => {
-    await api.closeCash(amount);
+      await refreshCash();
 
-    await refreshCash();
-  };
+      return result.data;
+    };
 
-  if (checkingSession) {
+  const openCash =
+    async (
+      amount,
+    ) => {
+      await api.openCash(
+        amount,
+      );
+
+      await refreshCash();
+    };
+
+  const closeCash =
+    async (
+      amount,
+    ) => {
+      await api.closeCash(
+        amount,
+      );
+
+      await refreshCash();
+    };
+
+  /*
+   * ==========================================
+   * CLIENTES
+   * ==========================================
+   */
+
+  const loadCustomer =
+    async (
+      id,
+    ) =>
+      (
+        await api.customer(
+          id,
+        )
+      ).data;
+
+  const createCustomer =
+    async (
+      payload,
+    ) => {
+      const result =
+        await api.createCustomer(
+          payload,
+        );
+
+      await refreshCustomers();
+
+      return result.data;
+    };
+
+  const updateCustomer =
+    async (
+      id,
+      payload,
+    ) => {
+      const result =
+        await api.updateCustomer(
+          id,
+          payload,
+        );
+
+      await refreshCustomers();
+
+      return result.data;
+    };
+
+  const deleteCustomer =
+    async (
+      id,
+    ) => {
+      const result =
+        await api.deleteCustomer(
+          id,
+        );
+
+      await refreshCustomers();
+
+      return result.data;
+    };
+
+  const addCustomerCredit =
+    async (
+      customerId,
+      payload,
+    ) => {
+      const result =
+        await api.addCustomerCredit(
+          customerId,
+          payload,
+        );
+
+      await Promise.all([
+        refreshCustomers(),
+        refreshProducts(),
+      ]);
+
+      return result.data;
+    };
+
+  const updateCustomerCredit =
+    async (
+      customerId,
+      creditId,
+      payload,
+    ) => {
+      const result =
+        await api.updateCustomerCredit(
+          customerId,
+          creditId,
+          payload,
+        );
+
+      await Promise.all([
+        refreshCustomers(),
+        refreshProducts(),
+      ]);
+
+      return result.data;
+    };
+
+  const deleteCustomerCredit =
+    async (
+      customerId,
+      creditId,
+    ) => {
+      const result =
+        await api.deleteCustomerCredit(
+          customerId,
+          creditId,
+        );
+
+      await Promise.all([
+        refreshCustomers(),
+        refreshProducts(),
+      ]);
+
+      return result.data;
+    };
+
+  const addCustomerPayment =
+    async (
+      customerId,
+      payload,
+    ) => {
+      const result =
+        await api.addCustomerPayment(
+          customerId,
+          payload,
+        );
+
+      await Promise.all([
+        refreshCustomers(),
+        refreshCash(),
+      ]);
+
+      return result.data;
+    };
+
+  /*
+   * ==========================================
+   * LOADING
+   * ==========================================
+   */
+
+  if (
+    checkingSession
+  ) {
     return (
-      <div className="grid min-h-screen place-items-center font-bold">
-        Cargando sistema…
+      <div className="grid min-h-screen place-items-center bg-[#f7f5ee]">
+        <div className="text-center">
+          <div className="mx-auto mb-4 size-10 animate-spin rounded-full border-4 border-black/10 border-t-forest" />
+
+          <p className="font-bold text-black/50">
+            Cargando sistema…
+          </p>
+        </div>
       </div>
     );
   }
 
-  if (!user) {
-    return <Login onLogin={login} />;
+  /*
+   * ==========================================
+   * LOGIN
+   * ==========================================
+   */
+
+  if (
+    !user
+  ) {
+    return (
+      <>
+        {sessionMessage && (
+          <div className="fixed left-1/2 top-5 z-[100] -translate-x-1/2 rounded-2xl bg-ink px-5 py-3 text-sm font-bold text-white shadow-xl">
+            {sessionMessage}
+          </div>
+        )}
+
+        <Login
+          onLogin={
+            login
+          }
+        />
+      </>
+    );
   }
 
+  /*
+   * ==========================================
+   * VISTAS
+   * ==========================================
+   */
+
   const views = {
-    dashboard: <DashboardView onNavigate={setActive} />,
+    dashboard: (
+      <DashboardView
+        onNavigate={
+          setActive
+        }
+      />
+    ),
 
     pos: (
       <PosView
-        products={products}
-        categories={categories}
-        cash={cash}
-        onCheckout={checkout}
+        products={
+          products
+        }
+
+        categories={
+          categories
+        }
+
+        cash={
+          cash
+        }
+
+        onCheckout={
+          checkout
+        }
+      />
+    ),
+
+    customers: (
+      <ClientsView
+        customers={
+          customers
+        }
+
+        products={
+          products
+        }
+
+        cash={
+          cash
+        }
+
+        onCreateCustomer={
+          createCustomer
+        }
+
+        onUpdateCustomer={
+          updateCustomer
+        }
+
+        onDeleteCustomer={
+          deleteCustomer
+        }
+
+        onLoadCustomer={
+          loadCustomer
+        }
+
+        onAddCredit={
+          addCustomerCredit
+        }
+
+        onUpdateCredit={
+          updateCustomerCredit
+        }
+
+        onDeleteCredit={
+          deleteCustomerCredit
+        }
+
+        onAddPayment={
+          addCustomerPayment
+        }
       />
     ),
 
     cash: (
       <CashView
-        cash={cash}
-        onSaveMovement={saveCashMovement}
-        onOpen={openCash}
-        onClose={closeCash}
+        cash={
+          cash
+        }
+
+        onSaveMovement={
+          saveCashMovement
+        }
+
+        onOpen={
+          openCash
+        }
+
+        onClose={
+          closeCash
+        }
       />
     ),
 
     products: (
       <ProductsView
-        products={products}
-        categories={categories}
-        brands={brands}
-        onSave={saveProduct}
+        products={
+          products
+        }
+
+        categories={
+          categories
+        }
+
+        brands={
+          brands
+        }
+
+        onSave={
+          saveProduct
+        }
       />
     ),
 
-    categories: <CategoriesView categories={categories} onSave={saveCatalog} />,
+    categories: (
+      <CategoriesView
+        categories={
+          categories
+        }
 
-    brands: <BrandsView brands={brands} onSave={saveCatalog} />,
+        onSave={
+          saveCatalog
+        }
+      />
+    ),
+
+    brands: (
+      <BrandsView
+        brands={
+          brands
+        }
+
+        onSave={
+          saveCatalog
+        }
+      />
+    ),
 
     inventory: (
       <InventoryView
-        products={products}
-        categories={categories}
-        brands={brands}
-        onAdjust={adjust}
+        products={
+          products
+        }
+
+        categories={
+          categories
+        }
+
+        brands={
+          brands
+        }
+
+        onAdjust={
+          adjust
+        }
       />
     ),
 
     purchases: (
       <PurchasesView
-        purchases={purchases}
-        suppliers={suppliers}
-        products={products}
-        onSavePurchase={savePurchase}
-        onSaveSupplier={saveSupplier}
+        purchases={
+          purchases
+        }
+
+        suppliers={
+          suppliers
+        }
+
+        products={
+          products
+        }
+
+        onSavePurchase={
+          savePurchase
+        }
+
+        onVoidPurchase={
+          voidPurchase
+        }
+
+        onSaveSupplier={
+          saveSupplier
+        }
       />
     ),
 
-    expenses: <ExpensesView expenses={expenses} onSave={saveExpense} />,
+    expenses: (
+      <ExpensesView
+        expenses={
+          expenses
+        }
 
-    reports: <ReportsView />,
+        onSave={
+          saveExpense
+        }
+      />
+    ),
 
-    settings: <SettingsView />,
+    reports: (
+      <ReportsView />
+    ),
+
+    settings: (
+      <SettingsView />
+    ),
   };
 
-  const logout = async () => {
-    try {
-      await api.logout();
-    } catch {
-      // Si el servidor ya no responde,
-      // cerramos igualmente la sesión local.
-    }
+  /*
+   * ==========================================
+   * LOGOUT
+   * ==========================================
+   */
 
-    setAuthToken("");
+  const logout =
+    async () => {
+      try {
+        await api.logout();
+      } catch {
+        /*
+         * Incluso si el servidor
+         * no responde, cerramos
+         * localmente.
+         */
+      }
 
-    setUser(null);
+      setAuthToken(
+        "",
+      );
 
-    setActive("dashboard");
+      setUser(
+        null,
+      );
 
-    setProducts([]);
+      setActive(
+        "dashboard",
+      );
 
-    setCategories([]);
+      setSessionMessage(
+        "",
+      );
 
-    setBrands([]);
+      clearApplicationState();
+    };
 
-    setSales([]);
-
-    setExpenses([]);
-
-    setPurchases([]);
-
-    setSuppliers([]);
-
-    setCash({
-      isOpen: false,
-      balance: 0,
-      movements: [],
-    });
-  };
+  /*
+   * ==========================================
+   * APP
+   * ==========================================
+   */
 
   return (
     <AppShell
-      active={active}
-      setActive={setActive}
-      online={online}
-      user={user}
-      onLogout={logout}
+      active={
+        active
+      }
+
+      setActive={
+        setActive
+      }
+
+      online={
+        online
+      }
+
+      user={
+        user
+      }
+
+      onLogout={
+        logout
+      }
     >
-      {views[active] || views.dashboard}
+      {views[
+        active
+      ] ||
+        views.dashboard}
     </AppShell>
   );
 }
