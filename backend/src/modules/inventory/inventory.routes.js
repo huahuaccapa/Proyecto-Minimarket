@@ -10,114 +10,181 @@ import { HttpError, required, response } from "../../utils/http.js";
 
 const router = Router();
 
-router.get("/movements", (req, res) => {
-  response(res, [...store.inventoryMovements].reverse());
-});
+const FRACTIONAL_UNITS = new Set(["kg", "kilogramo", "litro", "l"]);
 
-router.get("/low-stock", (req, res) => {
-  response(
-    res,
-    store.products.filter((item) => item.active && item.stock <= item.minStock),
-  );
-});
+const normalize = (value = "") =>
+  String(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
 
-router.get("/expiring", (req, res) => {
-  const days = Math.max(1, Number(req.query.days) || 60);
+const allowsFraction = (product) =>
+  FRACTIONAL_UNITS.has(normalize(product.saleUnit));
 
-  const now = new Date();
+router.get(
+  "/movements",
 
-  const limit = new Date(now.getTime() + days * 86400000);
+  (req, res) => {
+    response(
+      res,
 
-  const data = store.products
-    .filter((item) => item.active && item.expirationDate)
-    .map((item) => {
-      const expiry = new Date(`${item.expirationDate}T23:59:59`);
+      [...store.inventoryMovements].reverse(),
+    );
+  },
+);
 
-      return {
-        ...item,
+router.get(
+  "/low-stock",
 
-        expiryStatus: expiry < now ? "expired" : "expiring",
+  (req, res) => {
+    response(
+      res,
 
-        daysRemaining: Math.ceil((expiry - now) / 86400000),
+      store.products.filter(
+        (item) => item.active && item.stock <= item.minStock,
+      ),
+    );
+  },
+);
 
-        _expiry: expiry,
-      };
-    })
-    .filter((item) => item._expiry <= limit)
-    .sort((a, b) => a._expiry - b._expiry)
-    .map(({ _expiry, ...item }) => item);
+router.get(
+  "/expiring",
 
-  response(res, data);
-});
+  (req, res) => {
+    const days = Math.max(
+      1,
 
-router.post("/adjust", requireRole("Administrador"), (req, res) => {
-  required(req.body, ["productId", "type", "quantity", "reason"]);
+      Number(req.query.days) || 60,
+    );
 
-  if (!["entrada", "salida"].includes(req.body.type)) {
-    throw new HttpError(400, "El tipo debe ser entrada o salida");
-  }
+    const now = new Date();
 
-  const quantity = Number(req.body.quantity);
+    const limit = new Date(now.getTime() + days * 86400000);
 
-  if (!Number.isFinite(quantity) || quantity <= 0) {
-    throw new HttpError(400, "La cantidad debe ser mayor que cero");
-  }
+    const data = store.products
+      .filter((item) => item.active && item.expirationDate)
+      .map((item) => {
+        const expiry = new Date(`${item.expirationDate}T23:59:59-05:00`);
 
-  const product = store.products.find((item) => item.id === req.body.productId);
+        return {
+          ...item,
 
-  if (!product) {
-    throw new HttpError(404, "Producto no encontrado");
-  }
+          expiryStatus: expiry < now ? "expired" : "expiring",
 
-  if (product.saleUnit === "unidad" && !Number.isInteger(quantity)) {
-    throw new HttpError(400, `${product.name} solo admite cantidades enteras`);
-  }
+          daysRemaining: Math.ceil((expiry - now) / 86400000),
 
-  if (req.body.type === "salida" && product.stock < quantity) {
-    throw new HttpError(409, "Stock insuficiente");
-  }
+          _expiry: expiry,
+        };
+      })
+      .filter((item) => item._expiry <= limit)
+      .sort((a, b) => a._expiry - b._expiry)
+      .map(({ _expiry, ...item }) => item);
 
-  product.stock = Number(
-    (
-      product.stock + (req.body.type === "entrada" ? quantity : -quantity)
-    ).toFixed(3),
-  );
+    response(res, data);
+  },
+);
 
-  const movement = {
-    id: randomUUID(),
+router.post(
+  "/adjust",
 
-    productId: product.id,
+  requireRole("Administrador"),
 
-    productName: product.name,
+  (req, res) => {
+    required(req.body, ["productId", "type", "quantity", "reason"]);
 
-    type: req.body.type,
+    if (!["entrada", "salida"].includes(req.body.type)) {
+      throw new HttpError(
+        400,
 
-    reasonType: String(req.body.reasonType || "ajuste_manual"),
+        "El tipo debe ser entrada o salida",
+      );
+    }
 
-    reason: String(req.body.reason).trim(),
+    const quantity = Number(req.body.quantity);
 
-    quantity,
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      throw new HttpError(
+        400,
 
-    stockAfter: product.stock,
+        "La cantidad debe ser mayor que cero",
+      );
+    }
 
-    date: new Date().toISOString(),
+    const product = store.products.find(
+      (item) => item.id === req.body.productId,
+    );
 
-    createdBy: req.user.id,
-  };
+    if (!product) {
+      throw new HttpError(
+        404,
 
-  store.inventoryMovements.push(movement);
+        "Producto no encontrado",
+      );
+    }
 
-  persistStore();
+    if (!allowsFraction(product) && !Number.isInteger(quantity)) {
+      throw new HttpError(
+        400,
 
-  response(
-    res,
-    {
-      product,
-      movement,
-    },
-    "Inventario actualizado",
-    201,
-  );
-});
+        `${product.name} solo admite cantidades enteras`,
+      );
+    }
+
+    if (req.body.type === "salida" && Number(product.stock) < quantity) {
+      throw new HttpError(
+        409,
+
+        "Stock insuficiente",
+      );
+    }
+
+    product.stock = Number(
+      (
+        Number(product.stock || 0) +
+        (req.body.type === "entrada" ? quantity : -quantity)
+      ).toFixed(3),
+    );
+
+    const movement = {
+      id: randomUUID(),
+
+      productId: product.id,
+
+      productName: product.name,
+
+      type: req.body.type,
+
+      reasonType: String(req.body.reasonType || "ajuste_manual"),
+
+      reason: String(req.body.reason).trim(),
+
+      quantity,
+
+      stockAfter: product.stock,
+
+      date: new Date().toISOString(),
+
+      createdBy: req.user.id,
+    };
+
+    store.inventoryMovements.push(movement);
+
+    persistStore();
+
+    response(
+      res,
+
+      {
+        product,
+        movement,
+      },
+
+      "Inventario actualizado",
+
+      201,
+    );
+  },
+);
 
 export default router;
