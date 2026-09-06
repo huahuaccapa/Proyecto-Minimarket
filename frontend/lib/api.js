@@ -1,231 +1,803 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
+const API_URL =
+  "/backend-api";
 
-let memoryToken = "";
+let memoryToken =
+  "";
 
-export function setAuthToken(token) {
-  memoryToken = token || "";
+/*
+ * ==========================================
+ * TOKEN
+ * ==========================================
+ */
 
-  if (typeof window !== "undefined") {
-    if (memoryToken) {
-      localStorage.setItem("minimarket_token", memoryToken);
-    } else {
-      localStorage.removeItem("minimarket_token");
-    }
+export function setAuthToken(
+  token,
+) {
+  memoryToken =
+    token ||
+    "";
+
+  if (
+    typeof window ===
+    "undefined"
+  ) {
+    return;
+  }
+
+  if (
+    memoryToken
+  ) {
+    localStorage.setItem(
+      "minimarket_token",
+
+      memoryToken,
+    );
+  } else {
+    localStorage.removeItem(
+      "minimarket_token",
+    );
   }
 }
 
 export function getAuthToken() {
-  if (memoryToken) {
+  if (
+    memoryToken
+  ) {
     return memoryToken;
   }
 
-  if (typeof window !== "undefined") {
-    memoryToken = localStorage.getItem("minimarket_token") || "";
+  if (
+    typeof window !==
+    "undefined"
+  ) {
+    memoryToken =
+      localStorage.getItem(
+        "minimarket_token",
+      ) ||
+      "";
   }
 
   return memoryToken;
 }
 
-async function request(path, options = {}) {
-  const token = getAuthToken();
+/*
+ * ==========================================
+ * 401 GLOBAL
+ * ==========================================
+ */
 
-  const response = await fetch(`${API_URL}${path}`, {
-    ...options,
+function notifyUnauthorized(
+  message,
+) {
+  setAuthToken(
+    "",
+  );
 
-    headers: {
-      "Content-Type": "application/json",
+  if (
+    typeof window !==
+    "undefined"
+  ) {
+    window.dispatchEvent(
+      new CustomEvent(
+        "minimarket:unauthorized",
 
-      ...(token
-        ? {
-            Authorization: `Bearer ${token}`,
-          }
-        : {}),
+        {
+          detail: {
+            message:
+              message ||
+              "Tu sesión terminó. Inicia sesión nuevamente.",
+          },
+        },
+      ),
+    );
+  }
+}
 
-      ...options.headers,
-    },
-  });
+/*
+ * ==========================================
+ * REQUEST
+ * ==========================================
+ */
 
-  const data = await response.json().catch(() => ({}));
+async function request(
+  path,
+  options = {},
+) {
+  const token =
+    getAuthToken();
 
-  if (!response.ok) {
-    if (response.status === 401) {
-      setAuthToken("");
+  let response;
+
+  try {
+    response =
+      await fetch(
+        `${API_URL}${path}`,
+
+        {
+          ...options,
+
+          headers: {
+            "Content-Type":
+              "application/json",
+
+            ...(token
+              ? {
+                  Authorization:
+                    `Bearer ${token}`,
+                }
+              : {}),
+
+            ...options.headers,
+          },
+        },
+      );
+  } catch {
+    throw new Error(
+      "No se pudo conectar con el servidor",
+    );
+  }
+
+  const data =
+    await response
+      .json()
+      .catch(
+        () => ({}),
+      );
+
+  if (
+    !response.ok
+  ) {
+    const message =
+      data.message ||
+      "No se pudo completar la solicitud";
+
+    if (
+      response.status ===
+        401 &&
+      path !==
+        "/auth/login"
+    ) {
+      notifyUnauthorized(
+        message,
+      );
     }
 
-    throw new Error(data.message || "No se pudo completar la solicitud");
+    throw new Error(
+      message,
+    );
   }
 
   return data;
 }
 
 export const api = {
-  health: () => request("/health"),
+  health:
+    () =>
+      request(
+        "/health",
+      ),
 
-  login: (credentials) =>
-    request("/auth/login", {
-      method: "POST",
+  login:
+    (
+      credentials,
+    ) =>
+      request(
+        "/auth/login",
 
-      body: JSON.stringify(credentials),
-    }),
+        {
+          method:
+            "POST",
 
-  me: () => request("/auth/me"),
+          body:
+            JSON.stringify(
+              credentials,
+            ),
+        },
+      ),
 
-  logout: () =>
-    request("/auth/logout", {
-      method: "POST",
-    }),
+  me:
+    () =>
+      request(
+        "/auth/me",
+      ),
 
-  dashboard: () => request("/dashboard"),
+  logout:
+    () =>
+      request(
+        "/auth/logout",
 
-  products: () => request("/products"),
+        {
+          method:
+            "POST",
+        },
+      ),
 
-  createProduct: (product) =>
-    request("/products", {
-      method: "POST",
+  dashboard:
+    () =>
+      request(
+        "/dashboard",
+      ),
 
-      body: JSON.stringify(product),
-    }),
+  /*
+   * PRODUCTOS
+   */
+  products:
+    () =>
+      request(
+        "/products",
+      ),
 
-  updateProduct: (id, product) =>
-    request(`/products/${id}`, {
-      method: "PUT",
+  createProduct:
+    (
+      product,
+    ) =>
+      request(
+        "/products",
 
-      body: JSON.stringify(product),
-    }),
+        {
+          method:
+            "POST",
 
-  findBarcode: (barcode) => request(`/products/barcode/${barcode}`),
+          body:
+            JSON.stringify(
+              product,
+            ),
+        },
+      ),
 
-  categories: () => request("/catalogs/categories"),
+  updateProduct:
+    (
+      id,
+      product,
+    ) =>
+      request(
+        `/products/${id}`,
 
-  createCategory: (item) =>
-    request("/catalogs/categories", {
-      method: "POST",
+        {
+          method:
+            "PUT",
 
-      body: JSON.stringify(item),
-    }),
+          body:
+            JSON.stringify(
+              product,
+            ),
+        },
+      ),
 
-  updateCategory: (id, item) =>
-    request(`/catalogs/categories/${id}`, {
-      method: "PUT",
+  findBarcode:
+    (
+      barcode,
+    ) =>
+      request(
+        `/products/barcode/${barcode}`,
+      ),
 
-      body: JSON.stringify(item),
-    }),
+  /*
+   * CATEGORÍAS
+   */
+  categories:
+    () =>
+      request(
+        "/catalogs/categories",
+      ),
 
-  brands: () => request("/catalogs/brands"),
+  createCategory:
+    (
+      item,
+    ) =>
+      request(
+        "/catalogs/categories",
 
-  createBrand: (item) =>
-    request("/catalogs/brands", {
-      method: "POST",
+        {
+          method:
+            "POST",
 
-      body: JSON.stringify(item),
-    }),
+          body:
+            JSON.stringify(
+              item,
+            ),
+        },
+      ),
 
-  updateBrand: (id, item) =>
-    request(`/catalogs/brands/${id}`, {
-      method: "PUT",
+  updateCategory:
+    (
+      id,
+      item,
+    ) =>
+      request(
+        `/catalogs/categories/${id}`,
 
-      body: JSON.stringify(item),
-    }),
+        {
+          method:
+            "PUT",
 
-  sales: () => request("/sales"),
+          body:
+            JSON.stringify(
+              item,
+            ),
+        },
+      ),
 
-  createSale: (sale) =>
-    request("/sales", {
-      method: "POST",
+  /*
+   * MARCAS
+   */
+  brands:
+    () =>
+      request(
+        "/catalogs/brands",
+      ),
 
-      body: JSON.stringify(sale),
-    }),
+  createBrand:
+    (
+      item,
+    ) =>
+      request(
+        "/catalogs/brands",
 
-  voidSale: (id, reason) =>
-    request(`/sales/${id}/void`, {
-      method: "POST",
+        {
+          method:
+            "POST",
 
-      body: JSON.stringify({
-        reason,
-      }),
-    }),
+          body:
+            JSON.stringify(
+              item,
+            ),
+        },
+      ),
 
-  adjustStock: (payload) =>
-    request("/inventory/adjust", {
-      method: "POST",
+  updateBrand:
+    (
+      id,
+      item,
+    ) =>
+      request(
+        `/catalogs/brands/${id}`,
 
-      body: JSON.stringify(payload),
-    }),
+        {
+          method:
+            "PUT",
 
-  movements: () => request("/inventory/movements"),
+          body:
+            JSON.stringify(
+              item,
+            ),
+        },
+      ),
 
-  expiring: () => request("/inventory/expiring"),
+  /*
+   * VENTAS
+   */
+  sales:
+    () =>
+      request(
+        "/sales",
+      ),
 
-  purchases: () => request("/purchases"),
+  createSale:
+    (
+      sale,
+    ) =>
+      request(
+        "/sales",
 
-  createPurchase: (purchase) =>
-    request("/purchases", {
-      method: "POST",
+        {
+          method:
+            "POST",
 
-      body: JSON.stringify(purchase),
-    }),
+          body:
+            JSON.stringify(
+              sale,
+            ),
+        },
+      ),
 
-  suppliers: () => request("/purchases/suppliers"),
+  voidSale:
+    (
+      id,
+      reason,
+    ) =>
+      request(
+        `/sales/${id}/void`,
 
-  createSupplier: (supplier) =>
-    request("/purchases/suppliers", {
-      method: "POST",
+        {
+          method:
+            "POST",
 
-      body: JSON.stringify(supplier),
-    }),
+          body:
+            JSON.stringify({
+              reason,
+            }),
+        },
+      ),
 
-  updateSupplier: (id, supplier) =>
-    request(`/purchases/suppliers/${id}`, {
-      method: "PUT",
+  /*
+   * INVENTARIO
+   */
+  adjustStock:
+    (
+      payload,
+    ) =>
+      request(
+        "/inventory/adjust",
 
-      body: JSON.stringify(supplier),
-    }),
+        {
+          method:
+            "POST",
 
-  expenses: () => request("/expenses"),
+          body:
+            JSON.stringify(
+              payload,
+            ),
+        },
+      ),
 
-  createExpense: (expense) =>
-    request("/expenses", {
-      method: "POST",
+  movements:
+    () =>
+      request(
+        "/inventory/movements",
+      ),
 
-      body: JSON.stringify(expense),
-    }),
+  expiring:
+    () =>
+      request(
+        "/inventory/expiring",
+      ),
 
-  voidExpense: (id, reason) =>
-    request(`/expenses/${id}/void`, {
-      method: "POST",
+  /*
+   * COMPRAS
+   */
+  purchases:
+    () =>
+      request(
+        "/purchases",
+      ),
 
-      body: JSON.stringify({
-        reason,
-      }),
-    }),
+  createPurchase:
+    (
+      purchase,
+    ) =>
+      request(
+        "/purchases",
 
-  report: (period = "weekly") =>
-    request(`/reports/summary?period=${encodeURIComponent(period)}`),
+        {
+          method:
+            "POST",
 
-  cash: () => request("/cash"),
+          body:
+            JSON.stringify(
+              purchase,
+            ),
+        },
+      ),
 
-  openCash: (openingAmount) =>
-    request("/cash/open", {
-      method: "POST",
+  voidPurchase:
+    (
+      id,
+      reason,
+    ) =>
+      request(
+        `/purchases/${id}/void`,
 
-      body: JSON.stringify({
-        openingAmount,
-      }),
-    }),
+        {
+          method:
+            "POST",
 
-  closeCash: (closingAmount) =>
-    request("/cash/close", {
-      method: "POST",
+          body:
+            JSON.stringify({
+              reason,
+            }),
+        },
+      ),
 
-      body: JSON.stringify({
-        closingAmount,
-      }),
-    }),
+  suppliers:
+    () =>
+      request(
+        "/purchases/suppliers",
+      ),
 
-  createCashMovement: (movement) =>
-    request("/cash/movements", {
-      method: "POST",
+  createSupplier:
+    (
+      supplier,
+    ) =>
+      request(
+        "/purchases/suppliers",
 
-      body: JSON.stringify(movement),
-    }),
+        {
+          method:
+            "POST",
+
+          body:
+            JSON.stringify(
+              supplier,
+            ),
+        },
+      ),
+
+  updateSupplier:
+    (
+      id,
+      supplier,
+    ) =>
+      request(
+        `/purchases/suppliers/${id}`,
+
+        {
+          method:
+            "PUT",
+
+          body:
+            JSON.stringify(
+              supplier,
+            ),
+        },
+      ),
+
+  /*
+   * GASTOS
+   */
+  expenses:
+    () =>
+      request(
+        "/expenses",
+      ),
+
+  createExpense:
+    (
+      expense,
+    ) =>
+      request(
+        "/expenses",
+
+        {
+          method:
+            "POST",
+
+          body:
+            JSON.stringify(
+              expense,
+            ),
+        },
+      ),
+
+  voidExpense:
+    (
+      id,
+      reason,
+    ) =>
+      request(
+        `/expenses/${id}/void`,
+
+        {
+          method:
+            "POST",
+
+          body:
+            JSON.stringify({
+              reason,
+            }),
+        },
+      ),
+
+  /*
+   * CLIENTES
+   */
+  customers:
+    () =>
+      request(
+        "/customers",
+      ),
+
+  customer:
+    (
+      id,
+    ) =>
+      request(
+        `/customers/${id}`,
+      ),
+
+  createCustomer:
+    (
+      customer,
+    ) =>
+      request(
+        "/customers",
+
+        {
+          method:
+            "POST",
+
+          body:
+            JSON.stringify(
+              customer,
+            ),
+        },
+      ),
+
+  updateCustomer:
+    (
+      id,
+      customer,
+    ) =>
+      request(
+        `/customers/${id}`,
+
+        {
+          method:
+            "PUT",
+
+          body:
+            JSON.stringify(
+              customer,
+            ),
+        },
+      ),
+
+  deleteCustomer:
+    (
+      id,
+    ) =>
+      request(
+        `/customers/${id}`,
+
+        {
+          method:
+            "DELETE",
+        },
+      ),
+
+  addCustomerCredit:
+    (
+      customerId,
+      payload,
+    ) =>
+      request(
+        `/customers/${customerId}/credits`,
+
+        {
+          method:
+            "POST",
+
+          body:
+            JSON.stringify(
+              payload,
+            ),
+        },
+      ),
+
+  updateCustomerCredit:
+    (
+      customerId,
+      creditId,
+      payload,
+    ) =>
+      request(
+        `/customers/${customerId}/credits/${creditId}`,
+
+        {
+          method:
+            "PUT",
+
+          body:
+            JSON.stringify(
+              payload,
+            ),
+        },
+      ),
+
+  deleteCustomerCredit:
+    (
+      customerId,
+      creditId,
+      reason =
+        "Registro eliminado",
+    ) =>
+      request(
+        `/customers/${customerId}/credits/${creditId}`,
+
+        {
+          method:
+            "DELETE",
+
+          body:
+            JSON.stringify({
+              reason,
+            }),
+        },
+      ),
+
+  addCustomerPayment:
+    (
+      customerId,
+      payload,
+    ) =>
+      request(
+        `/customers/${customerId}/payments`,
+
+        {
+          method:
+            "POST",
+
+          body:
+            JSON.stringify(
+              payload,
+            ),
+        },
+      ),
+
+  /*
+   * REPORTES
+   */
+  report:
+    (
+      period =
+        "weekly",
+    ) =>
+      request(
+        `/reports/summary?period=${encodeURIComponent(
+          period,
+        )}`,
+      ),
+
+  /*
+   * CAJA
+   */
+  cash:
+    () =>
+      request(
+        "/cash",
+      ),
+
+  openCash:
+    (
+      openingAmount,
+    ) =>
+      request(
+        "/cash/open",
+
+        {
+          method:
+            "POST",
+
+          body:
+            JSON.stringify({
+              openingAmount,
+            }),
+        },
+      ),
+
+  closeCash:
+    (
+      closingAmount,
+    ) =>
+      request(
+        "/cash/close",
+
+        {
+          method:
+            "POST",
+
+          body:
+            JSON.stringify({
+              closingAmount,
+            }),
+        },
+      ),
+
+  createCashMovement:
+    (
+      movement,
+    ) =>
+      request(
+        "/cash/movements",
+
+        {
+          method:
+            "POST",
+
+          body:
+            JSON.stringify(
+              movement,
+            ),
+        },
+      ),
 };
