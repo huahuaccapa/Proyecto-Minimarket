@@ -9,6 +9,7 @@ import {
 import {
   AlertTriangle,
   Banknote,
+  Camera,
   CheckCircle2,
   LockKeyhole,
   Minus,
@@ -20,6 +21,8 @@ import {
   Wallet,
 } from 'lucide-react';
 
+import BarcodeScanner from '../components/BarcodeScanner';
+
 import {
   EmptyState,
   PageTitle,
@@ -29,13 +32,18 @@ import {
   formatMoney,
 } from '../data/mock';
 
-const CHILLED_SURCHARGE = 1;
+const CHILLED_SURCHARGE =
+  1;
 
 const normalizeText = (
   value = '',
 ) =>
-  String(value)
-    .normalize('NFD')
+  String(
+    value,
+  )
+    .normalize(
+      'NFD',
+    )
     .replace(
       /[\u0300-\u036f]/g,
       '',
@@ -46,13 +54,15 @@ const normalizeText = (
 function isExpired(
   expirationDate,
 ) {
-  if (!expirationDate) {
+  if (
+    !expirationDate
+  ) {
     return false;
   }
 
   const expiration =
     new Date(
-      `${expirationDate}T23:59:59`,
+      `${expirationDate}T23:59:59-05:00`,
     );
 
   if (
@@ -78,40 +88,79 @@ export default function PosView({
   const [
     barcode,
     setBarcode,
-  ] = useState('');
+  ] =
+    useState(
+      '',
+    );
 
   const [
     cart,
     setCart,
-  ] = useState([]);
+  ] =
+    useState(
+      [],
+    );
 
   const [
     received,
     setReceived,
-  ] = useState('');
+  ] =
+    useState(
+      '',
+    );
 
   const [
     message,
     setMessage,
-  ] = useState('');
+  ] =
+    useState(
+      '',
+    );
 
   const [
     messageType,
     setMessageType,
-  ] = useState('success');
+  ] =
+    useState(
+      'success',
+    );
 
   const [
     processing,
     setProcessing,
-  ] = useState(false);
+  ] =
+    useState(
+      false,
+    );
+
+  const [
+    scannerOpen,
+    setScannerOpen,
+  ] =
+    useState(
+      false,
+    );
 
   const inputRef =
-    useRef(null);
+    useRef(
+      null,
+    );
+
+  const receivedRef =
+    useRef(
+      null,
+    );
 
   const cashOpen =
     Boolean(
       cash?.isOpen,
     );
+
+  /*
+   * ==========================================
+   * BEBIDAS
+   * ==========================================
+   */
 
   const beverageCategoryIds =
     useMemo(
@@ -134,7 +183,10 @@ export default function PosView({
                 category.id,
             ),
         ),
-      [categories],
+
+      [
+        categories,
+      ],
     );
 
   const isBeverage = (
@@ -144,6 +196,12 @@ export default function PosView({
       product.categoryId,
     );
 
+  /*
+   * ==========================================
+   * PRECIO
+   * ==========================================
+   */
+
   const unitPrice = (
     item,
   ) =>
@@ -151,9 +209,17 @@ export default function PosView({
       item.salePrice ||
         0,
     ) +
-    (item.isChilled
-      ? CHILLED_SURCHARGE
-      : 0);
+    (
+      item.isChilled
+        ? CHILLED_SURCHARGE
+        : 0
+    );
+
+  /*
+   * ==========================================
+   * TOTAL
+   * ==========================================
+   */
 
   const total =
     useMemo(
@@ -173,16 +239,51 @@ export default function PosView({
                     item.quantity ||
                       0,
                   ),
+
               0,
             )
-            .toFixed(2),
+            .toFixed(
+              2,
+            ),
         ),
-      [cart],
+
+      [
+        cart,
+      ],
+    );
+
+  const cartUnits =
+    useMemo(
+      () =>
+        Number(
+          cart
+            .reduce(
+              (
+                sum,
+                item,
+              ) =>
+                sum +
+                Number(
+                  item.quantity ||
+                    0,
+                ),
+
+              0,
+            )
+            .toFixed(
+              3,
+            ),
+        ),
+
+      [
+        cart,
+      ],
     );
 
   const receivedAmount =
     Number(
-      received || 0,
+      received ||
+        0,
     );
 
   const change =
@@ -191,72 +292,82 @@ export default function PosView({
         (
           receivedAmount -
           total
-        ).toFixed(2),
+        ).toFixed(
+          2,
+        ),
       ),
+
       0,
     );
 
+  /*
+   * ==========================================
+   * MENSAJES
+   * ==========================================
+   */
+
   const showMessage = (
     text,
-    type = 'success',
+    type =
+      'success',
   ) => {
-    setMessage(text);
+    setMessage(
+      text,
+    );
 
-    setMessageType(type);
+    setMessageType(
+      type,
+    );
   };
 
-  const validateProduct = (
-    product,
-  ) => {
-    if (!product) {
-      showMessage(
-        'No encontramos ese código. Registra primero el producto.',
-        'error',
-      );
+  /*
+   * ==========================================
+   * VALIDAR PRODUCTO
+   * ==========================================
+   */
 
-      return false;
-    }
+  const productValidationError =
+    (
+      product,
+    ) => {
+      if (
+        !product
+      ) {
+        return 'Producto no registrado.';
+      }
 
-    if (
-      product.active ===
-      false
-    ) {
-      showMessage(
-        `${product.name} está desactivado.`,
-        'error',
-      );
+      if (
+        product.active ===
+        false
+      ) {
+        return `${product.name} está desactivado.`;
+      }
 
-      return false;
-    }
+      if (
+        Number(
+          product.stock,
+        ) <=
+        0
+      ) {
+        return `${product.name} no tiene stock disponible.`;
+      }
 
-    if (
-      Number(
-        product.stock,
-      ) <= 0
-    ) {
-      showMessage(
-        `${product.name} no tiene stock disponible.`,
-        'error',
-      );
+      if (
+        isExpired(
+          product.expirationDate,
+        )
+      ) {
+        return `${product.name} está vencido y no puede venderse.`;
+      }
 
-      return false;
-    }
+      return '';
+    };
 
-    if (
-      isExpired(
-        product.expirationDate,
-      )
-    ) {
-      showMessage(
-        `${product.name} está vencido y no puede venderse.`,
-        'error',
-      );
-
-      return false;
-    }
-
-    return true;
-  };
+  /*
+   * ==========================================
+   * AGREGAR PRODUCTO
+   * ==========================================
+   */
 
   const addProduct = (
     product,
@@ -264,20 +375,43 @@ export default function PosView({
     if (
       !cashOpen
     ) {
+      const text =
+        'No puedes registrar ventas porque la caja está cerrada.';
+
       showMessage(
-        'No puedes registrar ventas porque la caja está cerrada.',
+        text,
         'error',
       );
 
-      return;
+      return {
+        ok:
+          false,
+
+        message:
+          text,
+      };
     }
 
-    if (
-      !validateProduct(
+    const validation =
+      productValidationError(
         product,
-      )
+      );
+
+    if (
+      validation
     ) {
-      return;
+      showMessage(
+        validation,
+        'error',
+      );
+
+      return {
+        ok:
+          false,
+
+        message:
+          validation,
+      };
     }
 
     const step =
@@ -286,47 +420,58 @@ export default function PosView({
         ? 0.25
         : 1;
 
-    setCart(
-      (
-        current,
-      ) => {
-        const existing =
-          current.find(
-            (
-              item,
-            ) =>
-              item.id ===
-              product.id,
-          );
+    const existing =
+      cart.find(
+        (
+          item,
+        ) =>
+          item.id ===
+          product.id,
+      );
 
-        if (
-          existing
-        ) {
-          const next =
+    if (
+      existing
+    ) {
+      const next =
+        Number(
+          (
             Number(
-              (
-                Number(
-                  existing.quantity,
-                ) +
-                step
-              ).toFixed(3),
-            );
+              existing.quantity,
+            ) +
+            step
+          ).toFixed(
+            3,
+          ),
+        );
 
-          if (
-            next >
-            Number(
-              product.stock,
-            )
-          ) {
-            showMessage(
-              `No hay más stock disponible de ${product.name}.`,
-              'error',
-            );
+      if (
+        next >
+        Number(
+          product.stock,
+        )
+      ) {
+        const text =
+          `No hay más stock disponible de ${product.name}.`;
 
-            return current;
-          }
+        showMessage(
+          text,
+          'error',
+        );
 
-          return current.map(
+        return {
+          ok:
+            false,
+
+          message:
+            text,
+        };
+      }
+
+      setCart(
+        (
+          current,
+        ) =>
+          current.map(
             (
               item,
             ) =>
@@ -339,10 +484,13 @@ export default function PosView({
                       next,
                   }
                 : item,
-          );
-        }
-
-        return [
+          ),
+      );
+    } else {
+      setCart(
+        (
+          current,
+        ) => [
           ...current,
 
           {
@@ -351,6 +499,7 @@ export default function PosView({
             quantity:
               Math.min(
                 step,
+
                 Number(
                   product.stock,
                 ),
@@ -359,34 +508,63 @@ export default function PosView({
             isChilled:
               false,
           },
-        ];
-      },
+        ],
+      );
+    }
+
+    setBarcode(
+      '',
     );
 
-    setBarcode('');
+    const text =
+      `${product.name} agregado.`;
 
     showMessage(
-      `${product.name} agregado a la venta.`,
+      text,
     );
 
-    inputRef.current?.focus();
+    return {
+      ok:
+        true,
+
+      message:
+        text,
+    };
   };
 
-  const scan = (
-    event,
+  /*
+   * ==========================================
+   * BUSCAR POR CÓDIGO
+   * ==========================================
+   */
+
+  const addByBarcode = (
+    rawCode,
   ) => {
-    event.preventDefault();
-
     const code =
-      barcode.trim();
+      String(
+        rawCode ||
+          '',
+      ).trim();
 
-    if (!code) {
+    if (
+      !code
+    ) {
+      const text =
+        'Ingresa o escanea un código de barras.';
+
       showMessage(
-        'Ingresa o escanea un código de barras.',
+        text,
         'error',
       );
 
-      return;
+      return {
+        ok:
+          false,
+
+        message:
+          text,
+      };
     }
 
     const product =
@@ -395,15 +573,132 @@ export default function PosView({
           item,
         ) =>
           String(
-            item.barcode,
+            item.barcode ||
+              '',
           ).trim() ===
           code,
       );
 
-    addProduct(
+    if (
+      !product
+    ) {
+      const text =
+        `El código ${code} no está registrado.`;
+
+      showMessage(
+        text,
+        'error',
+      );
+
+      return {
+        ok:
+          false,
+
+        message:
+          text,
+      };
+    }
+
+    return addProduct(
       product,
     );
   };
+
+  /*
+   * ==========================================
+   * CÓDIGO MANUAL / LECTOR USB
+   * ==========================================
+   */
+
+  const scan = (
+    event,
+  ) => {
+    event.preventDefault();
+
+    addByBarcode(
+      barcode,
+    );
+
+    window.setTimeout(
+      () =>
+        inputRef
+          .current
+          ?.focus(),
+      50,
+    );
+  };
+
+  /*
+   * ==========================================
+   * CÁMARA
+   * ==========================================
+   */
+
+  const openScanner =
+    () => {
+      if (
+        !cashOpen
+      ) {
+        showMessage(
+          'Primero debes abrir la caja.',
+          'error',
+        );
+
+        return;
+      }
+
+      setScannerOpen(
+        true,
+      );
+    };
+
+  const closeScanner =
+    (
+      goToPayment =
+        false,
+    ) => {
+      setScannerOpen(
+        false,
+      );
+
+      if (
+        goToPayment
+      ) {
+        window.setTimeout(
+          () => {
+            receivedRef
+              .current
+              ?.scrollIntoView({
+                behavior:
+                  'smooth',
+
+                block:
+                  'center',
+              });
+
+            receivedRef
+              .current
+              ?.focus();
+          },
+
+          150,
+        );
+      } else {
+        window.setTimeout(
+          () =>
+            inputRef
+              .current
+              ?.focus(),
+          100,
+        );
+      }
+    };
+
+  /*
+   * ==========================================
+   * CANTIDAD
+   * ==========================================
+   */
 
   const changeQuantity = (
     id,
@@ -449,10 +744,12 @@ export default function PosView({
             const next =
               Math.max(
                 minimum,
+
                 Math.min(
                   Number(
                     item.stock,
                   ),
+
                   candidate,
                 ),
               );
@@ -473,7 +770,9 @@ export default function PosView({
     value,
   ) => {
     const numeric =
-      Number(value);
+      Number(
+        value,
+      );
 
     setCart(
       (
@@ -519,10 +818,12 @@ export default function PosView({
             next =
               Math.max(
                 minimum,
+
                 Math.min(
                   Number(
                     item.stock,
                   ),
+
                   next,
                 ),
               );
@@ -541,6 +842,12 @@ export default function PosView({
         ),
     );
   };
+
+  /*
+   * ==========================================
+   * BEBIDA HELADA
+   * ==========================================
+   */
 
   const toggleChilled = (
     id,
@@ -574,6 +881,12 @@ export default function PosView({
     );
   };
 
+  /*
+   * ==========================================
+   * ELIMINAR
+   * ==========================================
+   */
+
   const removeProduct = (
     id,
   ) => {
@@ -591,6 +904,12 @@ export default function PosView({
     );
   };
 
+  /*
+   * ==========================================
+   * CONFIRMAR VENTA
+   * ==========================================
+   */
+
   const confirm =
     async () => {
       if (
@@ -603,7 +922,7 @@ export default function PosView({
         !cashOpen
       ) {
         showMessage(
-          'La caja está cerrada. Un administrador debe abrirla antes de registrar ventas.',
+          'La caja está cerrada.',
           'error',
         );
 
@@ -678,9 +997,13 @@ export default function PosView({
           result?.change ??
           change;
 
-        setCart([]);
+        setCart(
+          [],
+        );
 
-        setReceived('');
+        setReceived(
+          '',
+        );
 
         showMessage(
           `Venta ${saleNumber} registrada. Vuelto: ${formatMoney(
@@ -688,8 +1011,16 @@ export default function PosView({
           )}`,
         );
 
-        inputRef.current?.focus();
-      } catch (error) {
+        window.setTimeout(
+          () =>
+            inputRef
+              .current
+              ?.focus(),
+          100,
+        );
+      } catch (
+        error
+      ) {
         showMessage(
           error.message ||
             'No se pudo registrar la venta.',
@@ -702,6 +1033,12 @@ export default function PosView({
       }
     };
 
+  /*
+   * ==========================================
+   * PRODUCTOS RÁPIDOS
+   * ==========================================
+   */
+
   const quickProducts =
     products
       .filter(
@@ -712,7 +1049,8 @@ export default function PosView({
             false &&
           Number(
             product.stock,
-          ) > 0 &&
+          ) >
+            0 &&
           !isExpired(
             product.expirationDate,
           ),
@@ -727,14 +1065,20 @@ export default function PosView({
       <PageTitle
         eyebrow="Punto de venta"
         title="Caja rápida"
-        description="Escanea productos, recibe el efectivo y registra la venta. Todo movimiento queda conectado con inventario y caja."
+        description="Escanea productos con la cámara, lector físico o código manual. El stock, la caja y los reportes se actualizan automáticamente."
       />
+
+      {/* ======================================
+          CAJA CERRADA
+      ====================================== */}
 
       {!cashOpen && (
         <section className="mb-6 flex items-start gap-4 rounded-2xl border border-coral/20 bg-coral/10 p-5 text-coral">
           <LockKeyhole
             className="mt-0.5 shrink-0"
-            size={22}
+            size={
+              22
+            }
           />
 
           <div>
@@ -746,14 +1090,16 @@ export default function PosView({
               No se pueden
               registrar ventas.
               Un administrador
-              debe ingresar a
-              “Caja actual” y
-              realizar la
-              apertura.
+              debe abrir la
+              caja.
             </p>
           </div>
         </section>
       )}
+
+      {/* ======================================
+          CAJA ABIERTA
+      ====================================== */}
 
       {cashOpen && (
         <section className="mb-6 flex items-center justify-between gap-4 rounded-2xl bg-mint p-4">
@@ -787,143 +1133,224 @@ export default function PosView({
 
       <div className="grid gap-6 xl:grid-cols-[1fr_390px]">
         <section className="space-y-5">
-          <form
-            className="panel p-5"
-            onSubmit={
-              scan
-            }
-          >
-            <label className="text-sm font-black">
-              Escanear código
-              de barras
-            </label>
 
-            <div className="mt-3 flex gap-3">
-              <div className="relative flex-1">
-                <ScanBarcode className="absolute left-4 top-3.5 text-forest" />
+          {/* ==================================
+              ESCANEO
+          ================================== */}
 
-                <input
-                  ref={
-                    inputRef
-                  }
-                  autoFocus
-                  disabled={
-                    !cashOpen
-                  }
-                  className="field pl-12 text-lg font-bold disabled:cursor-not-allowed disabled:opacity-50"
-                  placeholder="Escanea o escribe el código"
-                  value={
-                    barcode
-                  }
-                  onChange={(
-                    event,
-                  ) =>
-                    setBarcode(
-                      event
-                        .target
-                        .value,
-                    )
-                  }
-                />
-              </div>
+          <section className="panel overflow-hidden">
+            <div className="bg-forest p-5 text-white sm:p-6">
+              <p className="text-xs font-black uppercase tracking-[0.16em] text-white/55">
+                Venta rápida
+              </p>
+
+              <h2 className="mt-1 text-2xl font-black">
+                Escanea los
+                productos
+              </h2>
+
+              <p className="mt-2 max-w-xl text-sm text-white/60">
+                En celular usa
+                la cámara. En
+                laptop puedes
+                usar cámara,
+                lector USB o
+                escribir el
+                código.
+              </p>
 
               <button
-                className="btn-primary"
-                type="submit"
+                type="button"
                 disabled={
                   !cashOpen
                 }
+                onClick={
+                  openScanner
+                }
+                className="mt-5 flex min-h-16 w-full items-center justify-center gap-3 rounded-2xl bg-white px-5 text-lg font-black text-forest shadow-sm disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:min-w-[280px]"
               >
-                <Search
-                  size={18}
+                <Camera
+                  size={
+                    24
+                  }
                 />
 
-                <span className="hidden sm:inline">
-                  Buscar
-                </span>
+                Escanear con
+                cámara
               </button>
             </div>
 
-            {message && (
-              <div
-                className={`mt-4 flex items-start gap-2 rounded-xl p-3 text-sm font-bold ${
-                  messageType ===
-                  'error'
-                    ? 'bg-coral/10 text-coral'
-                    : 'bg-mint text-forest'
-                }`}
-              >
-                {messageType ===
-                'error' ? (
-                  <AlertTriangle
-                    className="mt-0.5 shrink-0"
-                    size={17}
+            <form
+              className="p-5"
+              onSubmit={
+                scan
+              }
+            >
+              <label className="text-sm font-black">
+                Código manual
+                o lector USB
+              </label>
+
+              <div className="mt-3 flex gap-3">
+                <div className="relative flex-1">
+                  <ScanBarcode
+                    className="absolute left-4 top-3.5 text-forest"
+                    size={
+                      21
+                    }
                   />
-                ) : (
-                  <CheckCircle2
-                    className="mt-0.5 shrink-0"
-                    size={17}
+
+                  <input
+                    ref={
+                      inputRef
+                    }
+                    autoFocus
+                    disabled={
+                      !cashOpen
+                    }
+                    inputMode="numeric"
+                    autoComplete="off"
+                    className="field pl-12 text-lg font-bold disabled:cursor-not-allowed disabled:opacity-50"
+                    placeholder="Escanea o escribe el código"
+                    value={
+                      barcode
+                    }
+                    onChange={(
+                      event,
+                    ) =>
+                      setBarcode(
+                        event
+                          .target
+                          .value,
+                      )
+                    }
                   />
-                )}
-
-                <span>
-                  {message}
-                </span>
-              </div>
-            )}
-
-            {quickProducts.length >
-              0 && (
-              <div className="mt-4">
-                <p className="mb-2 text-xs font-bold text-black/35">
-                  Acceso rápido
-                </p>
-
-                <div className="flex flex-wrap gap-2">
-                  {quickProducts.map(
-                    (
-                      product,
-                    ) => (
-                      <button
-                        key={
-                          product.id
-                        }
-                        type="button"
-                        disabled={
-                          !cashOpen
-                        }
-                        className="rounded-full bg-cream px-3 py-2 text-xs font-bold transition hover:bg-mint disabled:opacity-40"
-                        onClick={() =>
-                          addProduct(
-                            product,
-                          )
-                        }
-                      >
-                        {
-                          product.name
-                        }
-                      </button>
-                    ),
-                  )}
                 </div>
+
+                <button
+                  className="btn-primary"
+                  type="submit"
+                  disabled={
+                    !cashOpen
+                  }
+                >
+                  <Search
+                    size={
+                      18
+                    }
+                  />
+
+                  <span className="hidden sm:inline">
+                    Buscar
+                  </span>
+                </button>
               </div>
-            )}
-          </form>
+
+              {message && (
+                <div
+                  className={`mt-4 flex items-start gap-2 rounded-xl p-3 text-sm font-bold ${
+                    messageType ===
+                    'error'
+                      ? 'bg-coral/10 text-coral'
+                      : 'bg-mint text-forest'
+                  }`}
+                >
+                  {messageType ===
+                  'error' ? (
+                    <AlertTriangle
+                      className="mt-0.5 shrink-0"
+                      size={
+                        17
+                      }
+                    />
+                  ) : (
+                    <CheckCircle2
+                      className="mt-0.5 shrink-0"
+                      size={
+                        17
+                      }
+                    />
+                  )}
+
+                  <span>
+                    {
+                      message
+                    }
+                  </span>
+                </div>
+              )}
+
+              {quickProducts.length >
+                0 && (
+                <div className="mt-4">
+                  <p className="mb-2 text-xs font-bold text-black/35">
+                    Acceso rápido
+                  </p>
+
+                  <div className="flex flex-wrap gap-2">
+                    {quickProducts.map(
+                      (
+                        product,
+                      ) => (
+                        <button
+                          key={
+                            product.id
+                          }
+                          type="button"
+                          disabled={
+                            !cashOpen
+                          }
+                          className="rounded-full bg-cream px-3 py-2 text-xs font-bold transition hover:bg-mint disabled:opacity-40"
+                          onClick={() =>
+                            addProduct(
+                              product,
+                            )
+                          }
+                        >
+                          {
+                            product.name
+                          }
+                        </button>
+                      ),
+                    )}
+                  </div>
+                </div>
+              )}
+            </form>
+          </section>
+
+          {/* ==================================
+              CARRITO
+          ================================== */}
 
           <section className="panel overflow-hidden">
-            <div className="border-b border-black/5 p-5">
-              <h2 className="text-lg font-black">
-                Productos de
-                la venta
-              </h2>
+            <div className="flex items-center justify-between border-b border-black/5 p-5">
+              <div>
+                <h2 className="text-lg font-black">
+                  Venta actual
+                </h2>
 
-              <p className="text-sm text-black/40">
-                {
-                  cart.length
-                }{' '}
-                productos
-                diferentes
-              </p>
+                <p className="text-sm text-black/40">
+                  {
+                    cart.length
+                  }{' '}
+                  productos
+                  diferentes ·{' '}
+                  {
+                    cartUnits
+                  }{' '}
+                  unidades
+                </p>
+              </div>
+
+              {cart.length >
+                0 && (
+                <strong className="text-xl text-forest">
+                  {formatMoney(
+                    total,
+                  )}
+                </strong>
+              )}
             </div>
 
             {!cart.length ? (
@@ -938,7 +1365,7 @@ export default function PosView({
                       key={
                         item.id
                       }
-                      className="grid grid-cols-[1fr_auto] gap-4 p-5 sm:grid-cols-[1fr_auto_auto] sm:items-center"
+                      className="grid grid-cols-[1fr_auto] gap-4 p-4 sm:grid-cols-[1fr_auto_auto] sm:items-center sm:p-5"
                     >
                       <div>
                         <p className="font-bold">
@@ -963,8 +1390,7 @@ export default function PosView({
                         </p>
 
                         <p className="mt-1 text-xs font-bold text-black/35">
-                          Stock
-                          disponible:{' '}
+                          Stock:{' '}
                           {
                             item.stock
                           }
@@ -987,7 +1413,9 @@ export default function PosView({
                             }`}
                           >
                             <Snowflake
-                              size={15}
+                              size={
+                                15
+                              }
                             />
 
                             {item.isChilled
@@ -1006,7 +1434,7 @@ export default function PosView({
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
-                          className="grid size-8 place-items-center rounded-xl bg-cream"
+                          className="grid size-9 place-items-center rounded-xl bg-cream"
                           onClick={() =>
                             changeQuantity(
                               item.id,
@@ -1015,13 +1443,15 @@ export default function PosView({
                           }
                         >
                           <Minus
-                            size={15}
+                            size={
+                              15
+                            }
                           />
                         </button>
 
                         <input
                           aria-label={`Cantidad de ${item.name}`}
-                          className="w-16 rounded-xl border border-black/10 px-2 py-1.5 text-center font-black"
+                          className="w-16 rounded-xl border border-black/10 px-2 py-2 text-center font-black"
                           type="number"
                           min={
                             item.saleUnit ===
@@ -1046,6 +1476,7 @@ export default function PosView({
                           ) =>
                             setExactQuantity(
                               item.id,
+
                               event
                                 .target
                                 .value,
@@ -1055,7 +1486,7 @@ export default function PosView({
 
                         <button
                           type="button"
-                          className="grid size-8 place-items-center rounded-xl bg-cream"
+                          className="grid size-9 place-items-center rounded-xl bg-cream"
                           onClick={() =>
                             changeQuantity(
                               item.id,
@@ -1064,7 +1495,9 @@ export default function PosView({
                           }
                         >
                           <Plus
-                            size={15}
+                            size={
+                              15
+                            }
                           />
                         </button>
 
@@ -1097,16 +1530,17 @@ export default function PosView({
 
                         <button
                           type="button"
-                          className="text-coral"
+                          className="grid size-9 place-items-center rounded-xl text-coral hover:bg-coral/10"
                           onClick={() =>
                             removeProduct(
                               item.id,
                             )
                           }
-                          aria-label={`Eliminar ${item.name}`}
                         >
                           <Trash2
-                            size={18}
+                            size={
+                              18
+                            }
                           />
                         </button>
                       </div>
@@ -1118,16 +1552,21 @@ export default function PosView({
           </section>
         </section>
 
+        {/* ====================================
+            COBRO
+        ==================================== */}
+
         <aside className="panel h-fit overflow-hidden xl:sticky xl:top-28">
           <div className="bg-ink p-6 text-white">
             <div className="flex items-center gap-2 text-white/50">
               <Wallet
-                size={18}
+                size={
+                  18
+                }
               />
 
               <span className="text-sm font-bold">
-                Total a
-                cobrar
+                Total a cobrar
               </span>
             </div>
 
@@ -1135,6 +1574,11 @@ export default function PosView({
               {formatMoney(
                 total,
               )}
+            </p>
+
+            <p className="mt-2 text-sm text-white/40">
+              {cartUnits}{' '}
+              unidades
             </p>
           </div>
 
@@ -1146,7 +1590,9 @@ export default function PosView({
             <div className="mt-3 flex items-center gap-3 rounded-2xl border border-forest bg-mint p-4 text-forest">
               <span className="grid size-11 place-items-center rounded-xl bg-white/70">
                 <Banknote
-                  size={22}
+                  size={
+                    22
+                  }
                 />
               </span>
 
@@ -1156,9 +1602,8 @@ export default function PosView({
                 </p>
 
                 <p className="text-xs font-bold opacity-60">
-                  Único método
+                  Método
                   disponible
-                  actualmente
                 </p>
               </div>
             </div>
@@ -1169,6 +1614,9 @@ export default function PosView({
             </label>
 
             <input
+              ref={
+                receivedRef
+              }
               disabled={
                 !cashOpen ||
                 !cart.length
@@ -1193,7 +1641,8 @@ export default function PosView({
               }
             />
 
-            {total > 0 &&
+            {total >
+              0 &&
               cashOpen && (
                 <div className="mt-3 flex flex-wrap gap-2">
                   {[
@@ -1221,14 +1670,16 @@ export default function PosView({
                         }
                       >
                         S/{' '}
-                        {amount}
+                        {
+                          amount
+                        }
                       </button>
                     ),
                   )}
 
                   <button
                     type="button"
-                    className="rounded-xl bg-cream px-3 py-2 text-xs font-black hover:bg-mint"
+                    className="rounded-xl bg-forest px-3 py-2 text-xs font-black text-white"
                     onClick={() =>
                       setReceived(
                         total.toFixed(
@@ -1245,8 +1696,7 @@ export default function PosView({
             <div className="mt-4 rounded-2xl bg-cream p-4">
               <div className="flex items-center justify-between">
                 <span className="text-sm text-black/50">
-                  Efectivo
-                  recibido
+                  Recibido
                 </span>
 
                 <strong>
@@ -1301,24 +1751,42 @@ export default function PosView({
               }
             >
               <CheckCircle2
-                size={20}
+                size={
+                  20
+                }
               />
 
               {processing
                 ? 'Registrando...'
-                : 'Confirmar venta'}
+                : `Cobrar ${formatMoney(total)}`}
             </button>
-
-            {!cashOpen && (
-              <p className="mt-3 text-center text-xs font-bold text-coral">
-                Debes abrir la
-                caja antes de
-                vender.
-              </p>
-            )}
           </div>
         </aside>
       </div>
+
+      {/* ======================================
+          ESCÁNER FULL SCREEN
+      ====================================== */}
+
+      {scannerOpen && (
+        <BarcodeScanner
+          total={
+            total
+          }
+
+          cartCount={
+            cart.length
+          }
+
+          onBarcode={
+            addByBarcode
+          }
+
+          onClose={
+            closeScanner
+          }
+        />
+      )}
     </>
   );
 }
