@@ -11,7 +11,7 @@ export function isExpired(dateValue) {
     return false;
   }
 
-  const expiration = new Date(`${dateValue}T23:59:59`);
+  const expiration = new Date(`${dateValue}T23:59:59-05:00`);
 
   return Number.isFinite(expiration.getTime()) && expiration < new Date();
 }
@@ -35,17 +35,26 @@ export function calculateSessionExpected(session) {
   const inflow = roundMoney(
     movements
       .filter((item) => item.direction === "in")
-      .reduce((sum, item) => sum + Number(item.amount || 0), 0),
+      .reduce(
+        (sum, item) => sum + Number(item.amount || 0),
+
+        0,
+      ),
   );
 
   const outflow = roundMoney(
     movements
       .filter((item) => item.direction === "out")
-      .reduce((sum, item) => sum + Number(item.amount || 0), 0),
+      .reduce(
+        (sum, item) => sum + Number(item.amount || 0),
+
+        0,
+      ),
   );
 
   return {
     inflow,
+
     outflow,
 
     expected: roundMoney(Number(session.openingAmount || 0) + inflow - outflow),
@@ -56,7 +65,11 @@ export function requireOpenCash() {
   const session = getOpenCashSession();
 
   if (!session) {
-    throw new HttpError(409, "Primero debes abrir la caja");
+    throw new HttpError(
+      409,
+
+      "Primero debes abrir la caja",
+    );
   }
 
   return session;
@@ -70,7 +83,11 @@ export function ensureCashAvailable(amount) {
   const { expected } = calculateSessionExpected(session);
 
   if (value > expected) {
-    throw new HttpError(409, "No hay suficiente efectivo en caja");
+    throw new HttpError(
+      409,
+
+      "No hay suficiente efectivo en caja",
+    );
   }
 
   return session;
@@ -91,14 +108,22 @@ export function addCashMovement({
   const value = roundMoney(amount);
 
   if (!Number.isFinite(value) || value <= 0) {
-    throw new HttpError(400, "El monto debe ser mayor que cero");
+    throw new HttpError(
+      400,
+
+      "El monto debe ser mayor que cero",
+    );
   }
 
   if (direction === "out") {
     const { expected } = calculateSessionExpected(session);
 
     if (value > expected) {
-      throw new HttpError(409, "No hay suficiente efectivo en caja");
+      throw new HttpError(
+        409,
+
+        "No hay suficiente efectivo en caja",
+      );
     }
   }
 
@@ -131,4 +156,38 @@ export function addCashMovement({
   store.cashMovements.push(movement);
 
   return movement;
+}
+
+export function customerBalance(customerId) {
+  const charges = roundMoney(
+    store.customerCredits
+      .filter(
+        (item) => item.customerId === customerId && item.status !== "voided",
+      )
+      .reduce(
+        (sum, item) => sum + Number(item.total || 0),
+
+        0,
+      ),
+  );
+
+  const payments = roundMoney(
+    store.customerPayments
+      .filter(
+        (item) => item.customerId === customerId && item.status !== "voided",
+      )
+      .reduce(
+        (sum, item) => sum + Number(item.amount || 0),
+
+        0,
+      ),
+  );
+
+  return {
+    charges,
+
+    payments,
+
+    balance: roundMoney(Math.max(0, charges - payments)),
+  };
 }
