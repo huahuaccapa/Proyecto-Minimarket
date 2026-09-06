@@ -19,6 +19,7 @@ import {
   ShoppingBasket,
   Tags,
   Truck,
+  Users,
   WalletCards,
   Warehouse,
   Wifi,
@@ -31,7 +32,9 @@ const menuItems = [
     id: 'dashboard',
     label: 'Resumen',
     icon: LayoutDashboard,
-    roles: ['Administrador'],
+    roles: [
+      'Administrador',
+    ],
   },
 
   {
@@ -45,66 +48,94 @@ const menuItems = [
   },
 
   {
+    id: 'customers',
+    label: 'Clientes',
+    icon: Users,
+    roles: [
+      'Administrador',
+      'Vendedora',
+    ],
+  },
+
+  {
     id: 'cash',
     label: 'Caja actual',
     icon: CircleDollarSign,
-    roles: ['Administrador'],
+    roles: [
+      'Administrador',
+    ],
   },
 
   {
     id: 'products',
     label: 'Productos',
     icon: Package,
-    roles: ['Administrador'],
+    roles: [
+      'Administrador',
+    ],
   },
 
   {
     id: 'categories',
     label: 'Categorías',
     icon: FolderTree,
-    roles: ['Administrador'],
+    roles: [
+      'Administrador',
+    ],
   },
 
   {
     id: 'brands',
     label: 'Marcas',
     icon: Tags,
-    roles: ['Administrador'],
+    roles: [
+      'Administrador',
+    ],
   },
 
   {
     id: 'inventory',
     label: 'Inventario',
     icon: Warehouse,
-    roles: ['Administrador'],
+    roles: [
+      'Administrador',
+    ],
   },
 
   {
     id: 'purchases',
     label: 'Compras',
     icon: Truck,
-    roles: ['Administrador'],
+    roles: [
+      'Administrador',
+    ],
   },
 
   {
     id: 'expenses',
     label: 'Gastos',
     icon: WalletCards,
-    roles: ['Administrador'],
+    roles: [
+      'Administrador',
+    ],
   },
 
   {
     id: 'reports',
     label: 'Reportes',
     icon: BarChart3,
-    roles: ['Administrador'],
+    roles: [
+      'Administrador',
+    ],
   },
 
   {
     id: 'settings',
     label: 'Configuración',
     icon: Settings,
-    roles: ['Administrador'],
+    roles: [
+      'Administrador',
+    ],
   },
 ];
 
@@ -119,12 +150,18 @@ export default function AppShell({
   const [
     mobileOpen,
     setMobileOpen,
-  ] = useState(false);
+  ] =
+    useState(
+      false,
+    );
 
   const [
     collapsed,
     setCollapsed,
-  ] = useState(false);
+  ] =
+    useState(
+      false,
+    );
 
   const allowedItems =
     menuItems.filter(
@@ -137,10 +174,21 @@ export default function AppShell({
   const navigate = (
     id,
   ) => {
-    setActive(id);
+    setActive(
+      id,
+    );
 
-    setMobileOpen(false);
+    setMobileOpen(
+      false,
+    );
   };
+
+  const current =
+    allowedItems.find(
+      (item) =>
+        item.id ===
+        active,
+    );
 
   return (
     <div
@@ -150,7 +198,6 @@ export default function AppShell({
           : 'lg:grid-cols-[260px_1fr]'
       } transition-all duration-300`}
     >
-      {/* Fondo móvil */}
       {mobileOpen && (
         <button
           type="button"
@@ -164,7 +211,6 @@ export default function AppShell({
         />
       )}
 
-      {/* SIDEBAR */}
       <aside
         className={`
           fixed inset-y-0 left-0 z-50
@@ -190,11 +236,11 @@ export default function AppShell({
           lg:translate-x-0
         `}
       >
-        {/* CABECERA / LOGO */}
         <div
           className={`
             flex h-[78px] shrink-0 items-center
             border-b border-white/10
+
             ${
               collapsed
                 ? 'justify-center px-3'
@@ -216,7 +262,9 @@ export default function AppShell({
           >
             <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-white text-[#176b48] shadow-sm">
               <ShoppingBasket
-                size={22}
+                size={
+                  22
+                }
               />
             </span>
 
@@ -233,11 +281,10 @@ export default function AppShell({
             )}
           </button>
 
-          {/* cerrar móvil */}
           {!collapsed && (
             <button
               type="button"
-              className="grid size-9 place-items-center rounded-xl text-white/50 transition hover:bg-white/10 hover:text-white lg:hidden"
+              className="grid size-9 place-items-center rounded-xl text-white/50 hover:bg-white/10 hover:text-white lg:hidden"
               onClick={() =>
                 setMobileOpen(
                   false,
@@ -245,17 +292,20 @@ export default function AppShell({
               }
             >
               <X
-                size={20}
+                size={
+                  20
+                }
               />
             </button>
           )}
         </div>
 
-        {/* MENÚ CON SCROLL PROPIO */}
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4 [scrollbar-width:thin] [scrollbar-color:rgba(255,255,255,0.18)_transparent]">
+        <div className="min-h-0 flex-1 overflow-y-auto px-3 py-4">
           <nav className="space-y-1">
             {allowedItems.map(
-              (item) => {
+              (
+                item,
+              ) => {
                 const Icon =
                   item.icon;
 
@@ -281,8 +331,7 @@ export default function AppShell({
                     }
                     className={`
                       group relative flex w-full items-center
-                      rounded-xl
-                      transition-all duration-150
+                      rounded-xl transition-all duration-150
 
                       ${
                         collapsed
@@ -293,12 +342,14 @@ export default function AppShell({
                       ${
                         selected
                           ? 'bg-white text-[#12231d] shadow-sm'
-                          : 'text-white/58 hover:bg-white/[0.07] hover:text-white'
+                          : 'text-white/60 hover:bg-white/[0.07] hover:text-white'
                       }
                     `}
                   >
                     <Icon
-                      size={19}
+                      size={
+                        19
+                      }
                       strokeWidth={
                         selected
                           ? 2.3
@@ -319,26 +370,6 @@ export default function AppShell({
                       !collapsed && (
                         <span className="ml-auto size-1.5 rounded-full bg-[#1e7653]" />
                       )}
-
-                    {/* Tooltip al colapsar */}
-                    {collapsed && (
-                      <span
-                        className="
-                          pointer-events-none
-                          absolute left-[72px] z-[80]
-                          hidden whitespace-nowrap
-                          rounded-lg bg-[#0b1712]
-                          px-3 py-2
-                          text-xs font-bold text-white
-                          shadow-xl
-                          group-hover:block
-                        "
-                      >
-                        {
-                          item.label
-                        }
-                      </span>
-                    )}
                   </button>
                 );
               },
@@ -346,177 +377,155 @@ export default function AppShell({
           </nav>
         </div>
 
-        {/* USUARIO SIEMPRE VISIBLE */}
         <div className="shrink-0 border-t border-white/10 p-3">
-          {!collapsed ? (
-            <div className="rounded-2xl bg-white/[0.06] p-3">
-              <div className="flex items-center gap-3">
-                <span className="grid size-10 shrink-0 place-items-center rounded-full bg-white/10 text-sm font-black">
-                  {String(
-                    user.name ||
-                      'U',
-                  )
-                    .charAt(0)
-                    .toUpperCase()}
-                </span>
-
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-black">
-                    {
-                      user.name
-                    }
-                  </p>
-
-                  <p className="mt-0.5 truncate text-[11px] font-semibold text-white/40">
-                    {
-                      user.role
-                    }
-                  </p>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={
-                  onLogout
+          {!collapsed && (
+            <div className="mb-3 rounded-2xl bg-white/[0.06] p-3">
+              <p className="truncate text-sm font-black">
+                {
+                  user.name
                 }
-                className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-white/[0.06] px-3 py-2.5 text-xs font-black text-[#ff8b7b] transition hover:bg-[#ff6f61]/10"
-              >
-                <LogOut
-                  size={16}
-                />
+              </p>
 
-                Cerrar sesión
-              </button>
+              <p className="mt-1 text-xs text-white/45">
+                {
+                  user.role
+                }
+              </p>
             </div>
-          ) : (
-            <button
-              type="button"
-              title="Cerrar sesión"
-              onClick={
-                onLogout
-              }
-              className="grid w-full place-items-center rounded-xl py-3 text-[#ff8b7b] transition hover:bg-white/[0.06]"
-            >
-              <LogOut
-                size={19}
-              />
-            </button>
           )}
 
-          {/* BOTÓN COLAPSAR DESKTOP */}
           <button
             type="button"
+            onClick={
+              onLogout
+            }
             title={
               collapsed
-                ? 'Expandir menú'
-                : 'Reducir menú'
+                ? 'Cerrar sesión'
+                : undefined
             }
-            onClick={() =>
-              setCollapsed(
-                (
-                  current,
-                ) =>
-                  !current,
-              )
-            }
-            className="
-              mt-2 hidden w-full items-center justify-center
-              gap-2 rounded-xl py-2
-              text-xs font-bold text-white/35
-              transition hover:bg-white/[0.05] hover:text-white
-              lg:flex
-            "
-          >
-            {collapsed ? (
-              <ChevronRight
-                size={17}
-              />
-            ) : (
-              <>
-                <ChevronLeft
-                  size={17}
-                />
+            className={`
+              flex w-full items-center rounded-xl
+              text-white/60 transition
+              hover:bg-white/[0.07]
+              hover:text-white
 
-                Reducir menú
-              </>
+              ${
+                collapsed
+                  ? 'justify-center p-3'
+                  : 'gap-3 px-4 py-3'
+              }
+            `}
+          >
+            <LogOut
+              size={
+                18
+              }
+            />
+
+            {!collapsed && (
+              <span className="text-sm font-bold">
+                Cerrar sesión
+              </span>
             )}
           </button>
         </div>
+
+        <button
+          type="button"
+          onClick={() =>
+            setCollapsed(
+              (
+                value,
+              ) =>
+                !value,
+            )
+          }
+          className="absolute -right-3 top-[94px] hidden size-7 place-items-center rounded-full border border-black/10 bg-white text-black shadow-sm lg:grid"
+        >
+          {collapsed ? (
+            <ChevronRight
+              size={
+                15
+              }
+            />
+          ) : (
+            <ChevronLeft
+              size={
+                15
+              }
+            />
+          )}
+        </button>
       </aside>
 
-      {/* CONTENIDO */}
       <div className="min-w-0">
-        {/* HEADER */}
-        <header
-          className="
-            sticky top-0 z-30
-            flex h-[78px] items-center
-            border-b border-black/[0.05]
-            bg-[#f7f5ee]/95 px-4
-            backdrop-blur-xl
-            sm:px-7 lg:px-8
-          "
-        >
-          <button
-            type="button"
-            aria-label="Abrir menú"
-            onClick={() =>
-              setMobileOpen(
-                true,
-              )
-            }
-            className="mr-3 grid size-10 place-items-center rounded-xl border border-black/5 bg-white shadow-sm lg:hidden"
-          >
-            <Menu
-              size={20}
-            />
-          </button>
+        <header className="sticky top-0 z-30 flex h-[70px] items-center justify-between border-b border-black/5 bg-[#f7f5ee]/90 px-4 backdrop-blur-xl sm:px-6 lg:px-8">
+          <div className="flex min-w-0 items-center gap-3">
+            <button
+              type="button"
+              className="grid size-10 place-items-center rounded-xl bg-white shadow-sm lg:hidden"
+              onClick={() =>
+                setMobileOpen(
+                  true,
+                )
+              }
+            >
+              <Menu
+                size={
+                  20
+                }
+              />
+            </button>
 
-          <div className="min-w-0">
-            <p className="hidden text-[11px] font-bold text-black/35 sm:block">
-              Panel
-              administrativo
-            </p>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-black sm:text-base">
+                {current?.label ||
+                  'Minimarket Mamá'}
+              </p>
 
-            <p className="truncate text-base font-black sm:text-lg">
-              Hola,{' '}
-              {user.name}
-            </p>
+              <p className="hidden text-xs text-black/40 sm:block">
+                {user.name} ·{' '}
+                {user.role}
+              </p>
+            </div>
           </div>
 
           <div
             className={`
-              ml-auto flex shrink-0 items-center
-              gap-2 rounded-full px-3 py-2
-              text-xs font-black
+              flex items-center gap-2 rounded-full
+              px-3 py-1.5 text-xs font-bold
+
               ${
                 online
-                  ? 'bg-[#dff3e8] text-[#1c6b4b]'
-                  : 'bg-[#fff0d5] text-[#966000]'
+                  ? 'bg-mint text-forest'
+                  : 'bg-coral/10 text-coral'
               }
             `}
           >
             {online ? (
               <Wifi
-                size={15}
+                size={
+                  14
+                }
               />
             ) : (
               <WifiOff
-                size={15}
+                size={
+                  14
+                }
               />
             )}
 
             <span className="hidden sm:inline">
               {online
-                ? 'Servidor conectado'
-                : 'Servidor desconectado'}
+                ? 'Conectado'
+                : 'Sin conexión'}
             </span>
           </div>
         </header>
 
-        {/* CUERPO */}
-        <main className="min-w-0 p-4 sm:p-6 lg:p-8 xl:p-10">
+        <main className="mx-auto w-full max-w-[1600px] p-4 sm:p-6 lg:p-8">
           {children}
         </main>
       </div>
