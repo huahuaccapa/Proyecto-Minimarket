@@ -10,7 +10,7 @@ import { HttpError, required, response } from "../../utils/http.js";
 
 const router = Router();
 
-const money = (value) => Number(Number(value).toFixed(4));
+const money4 = (value) => Number(Number(value).toFixed(4));
 
 const categoryExists = (id) =>
   store.categories.some((item) => item.id === id && item.active);
@@ -18,7 +18,7 @@ const categoryExists = (id) =>
 const brandExists = (id) =>
   !id || store.brands.some((item) => item.id === id && item.active);
 
-function buildProduct(body, current = {}) {
+function validateCommon(body, current = {}) {
   const purchasePrice = Number(
     body.purchasePrice ?? current.purchasePrice ?? 0,
   );
@@ -39,48 +39,108 @@ function buildProduct(body, current = {}) {
 
   const brandId = String(body.brandId ?? current.brandId ?? "");
 
-  const hasExplicitStock =
-    body.stock !== undefined && body.stock !== null && body.stock !== "";
-
-  const stock = Number(
-    hasExplicitStock
-      ? body.stock
-      : current.id
-        ? current.stock
-        : purchaseQuantity * contentQuantity,
-  );
-
-  const unitCost = purchasePrice / Math.max(contentQuantity, 1);
-
-  const numbers = [
+  const values = [
     purchasePrice,
     contentQuantity,
     purchaseQuantity,
     salePrice,
     minStock,
-    stock,
-    unitCost,
   ];
 
   if (
-    !numbers.every(Number.isFinite) ||
+    !values.every(Number.isFinite) ||
     purchasePrice <= 0 ||
     contentQuantity <= 0 ||
     purchaseQuantity <= 0 ||
     salePrice <= 0 ||
-    minStock < 0 ||
-    stock < 0
+    minStock < 0
   ) {
-    throw new HttpError(400, "Revisa los precios y cantidades ingresados");
+    throw new HttpError(
+      400,
+
+      "Revisa los precios y cantidades ingresados",
+    );
   }
 
   if (!categoryExists(categoryId)) {
-    throw new HttpError(400, "Selecciona una categoría válida");
+    throw new HttpError(
+      400,
+
+      "Selecciona una categoría válida",
+    );
   }
 
   if (!brandExists(brandId)) {
-    throw new HttpError(400, "Selecciona una marca válida");
+    throw new HttpError(
+      400,
+
+      "Selecciona una marca válida",
+    );
   }
+
+  return {
+    purchasePrice,
+    contentQuantity,
+    purchaseQuantity,
+    salePrice,
+    minStock,
+    categoryId,
+    brandId,
+  };
+}
+
+function buildNewProduct(body) {
+  const data = validateCommon(body);
+
+  const stock = data.purchaseQuantity * data.contentQuantity;
+
+  const unitCost = data.purchasePrice / data.contentQuantity;
+
+  return {
+    barcode: String(body.barcode || "").trim(),
+
+    name: String(body.name || "").trim(),
+
+    description: String(body.description || "").trim(),
+
+    categoryId: data.categoryId,
+
+    brandId: data.brandId,
+
+    purchasePresentation: body.purchasePresentation || "unidad",
+
+    purchasePrice: money4(data.purchasePrice),
+
+    contentQuantity: data.contentQuantity,
+
+    purchaseQuantity: data.purchaseQuantity,
+
+    unitCost: money4(unitCost),
+
+    salePrice: Number(data.salePrice.toFixed(2)),
+
+    stock: Number(stock.toFixed(3)),
+
+    minStock: data.minStock,
+
+    saleUnit: body.saleUnit || body.unit || "unidad",
+
+    unit: body.unit || body.saleUnit || "unidad",
+
+    image: String(body.image || ""),
+
+    expirationDate: String(body.expirationDate || ""),
+
+    sanitaryRegistration: String(body.sanitaryRegistration || "").trim(),
+
+    lot: String(body.lot || "").trim(),
+
+    active: body.active ?? true,
+  };
+}
+
+function buildUpdatedProduct(body, current) {
+  const data = validateCommon(body, current);
 
   return {
     ...current,
@@ -91,26 +151,28 @@ function buildProduct(body, current = {}) {
 
     description: String(body.description ?? current.description ?? "").trim(),
 
-    categoryId,
+    categoryId: data.categoryId,
 
-    brandId,
+    brandId: data.brandId,
 
     purchasePresentation:
       body.purchasePresentation ?? current.purchasePresentation ?? "unidad",
 
-    purchasePrice: money(purchasePrice),
+    purchasePrice: money4(data.purchasePrice),
 
-    contentQuantity,
+    contentQuantity: data.contentQuantity,
 
-    purchaseQuantity,
+    purchaseQuantity: data.purchaseQuantity,
 
-    unitCost: money(unitCost),
+    // Protegido.
+    unitCost: Number(current.unitCost || 0),
 
-    salePrice: Number(salePrice.toFixed(2)),
+    // Protegido.
+    stock: Number(current.stock || 0),
 
-    stock: Number(stock.toFixed(3)),
+    salePrice: Number(data.salePrice.toFixed(2)),
 
-    minStock,
+    minStock: data.minStock,
 
     saleUnit: body.saleUnit ?? body.unit ?? current.saleUnit ?? "unidad",
 
@@ -130,131 +192,187 @@ function buildProduct(body, current = {}) {
   };
 }
 
-router.get("/", (req, res) => {
-  const search = String(req.query.search || "").toLowerCase();
+router.get(
+  "/",
 
-  response(
-    res,
-    store.products.filter((item) =>
-      `${item.name} ${item.barcode} ${item.lot || ""}`
-        .toLowerCase()
-        .includes(search),
-    ),
-  );
-});
+  (req, res) => {
+    const search = String(req.query.search || "").toLowerCase();
 
-router.get("/barcode/:barcode", (req, res) => {
-  const product = store.products.find(
-    (item) => item.barcode === req.params.barcode,
-  );
+    response(
+      res,
 
-  if (!product) {
-    throw new HttpError(404, "Producto no encontrado");
-  }
+      store.products.filter((item) =>
+        `${item.name} ${item.barcode} ${item.lot || ""}`
+          .toLowerCase()
+          .includes(search),
+      ),
+    );
+  },
+);
 
-  response(res, product);
-});
+router.get(
+  "/barcode/:barcode",
 
-router.get("/:id", (req, res) => {
-  const product = store.products.find((item) => item.id === req.params.id);
+  (req, res) => {
+    const product = store.products.find(
+      (item) => item.barcode === req.params.barcode,
+    );
 
-  if (!product) {
-    throw new HttpError(404, "Producto no encontrado");
-  }
+    if (!product) {
+      throw new HttpError(
+        404,
 
-  response(res, product);
-});
+        "Producto no encontrado",
+      );
+    }
 
-router.post("/", requireRole("Administrador"), (req, res) => {
-  required(req.body, [
-    "barcode",
-    "name",
-    "categoryId",
-    "purchasePrice",
-    "salePrice",
-  ]);
+    response(res, product);
+  },
+);
 
-  const barcode = String(req.body.barcode).trim();
+router.get(
+  "/:id",
 
-  if (store.products.some((item) => item.barcode === barcode)) {
-    throw new HttpError(409, "El código de barras ya está registrado");
-  }
+  (req, res) => {
+    const product = store.products.find((item) => item.id === req.params.id);
 
-  const product = {
-    id: randomUUID(),
+    if (!product) {
+      throw new HttpError(
+        404,
 
-    ...buildProduct(req.body),
+        "Producto no encontrado",
+      );
+    }
 
-    createdAt: new Date().toISOString(),
-  };
+    response(res, product);
+  },
+);
 
-  store.products.unshift(product);
+router.post(
+  "/",
 
-  if (product.stock > 0) {
-    store.inventoryMovements.push({
+  requireRole("Administrador"),
+
+  (req, res) => {
+    required(req.body, [
+      "barcode",
+      "name",
+      "categoryId",
+      "purchasePrice",
+      "salePrice",
+    ]);
+
+    const barcode = String(req.body.barcode).trim();
+
+    if (!barcode) {
+      throw new HttpError(
+        400,
+
+        "Ingresa un código de barras",
+      );
+    }
+
+    if (store.products.some((item) => item.barcode === barcode)) {
+      throw new HttpError(
+        409,
+
+        "El código de barras ya está registrado",
+      );
+    }
+
+    const product = {
       id: randomUUID(),
 
-      productId: product.id,
-
-      productName: product.name,
-
-      type: "entrada",
-
-      reasonType: "inventario_inicial",
-
-      reason: "Inventario inicial",
-
-      quantity: product.stock,
-
-      stockAfter: product.stock,
-
-      date: new Date().toISOString(),
-
-      createdBy: req.user.id,
-    });
-  }
-
-  persistStore();
-
-  response(res, product, "Producto creado", 201);
-});
-
-router.put("/:id", requireRole("Administrador"), (req, res) => {
-  const index = store.products.findIndex((item) => item.id === req.params.id);
-
-  if (index === -1) {
-    throw new HttpError(404, "Producto no encontrado");
-  }
-
-  const barcode = String(
-    req.body.barcode ?? store.products[index].barcode,
-  ).trim();
-
-  if (
-    store.products.some(
-      (item, position) => position !== index && item.barcode === barcode,
-    )
-  ) {
-    throw new HttpError(409, "El código de barras ya está registrado");
-  }
-
-  const updated = {
-    ...buildProduct(
-      {
+      ...buildNewProduct({
         ...req.body,
         barcode,
-      },
-      store.products[index],
-    ),
+      }),
 
-    updatedAt: new Date().toISOString(),
-  };
+      createdAt: new Date().toISOString(),
+    };
 
-  store.products[index] = updated;
+    store.products.unshift(product);
 
-  persistStore();
+    if (product.stock > 0) {
+      store.inventoryMovements.push({
+        id: randomUUID(),
 
-  response(res, updated, "Producto actualizado");
-});
+        productId: product.id,
+
+        productName: product.name,
+
+        type: "entrada",
+
+        reasonType: "inventario_inicial",
+
+        reason: "Inventario inicial",
+
+        quantity: product.stock,
+
+        stockAfter: product.stock,
+
+        date: new Date().toISOString(),
+
+        createdBy: req.user.id,
+      });
+    }
+
+    persistStore();
+
+    response(res, product, "Producto creado", 201);
+  },
+);
+
+router.put(
+  "/:id",
+
+  requireRole("Administrador"),
+
+  (req, res) => {
+    const index = store.products.findIndex((item) => item.id === req.params.id);
+
+    if (index === -1) {
+      throw new HttpError(
+        404,
+
+        "Producto no encontrado",
+      );
+    }
+
+    const current = store.products[index];
+
+    const barcode = String(req.body.barcode ?? current.barcode).trim();
+
+    if (
+      store.products.some(
+        (item, position) => position !== index && item.barcode === barcode,
+      )
+    ) {
+      throw new HttpError(
+        409,
+
+        "El código de barras ya está registrado",
+      );
+    }
+
+    const updated = {
+      ...buildUpdatedProduct(
+        {
+          ...req.body,
+          barcode,
+        },
+        current,
+      ),
+
+      updatedAt: new Date().toISOString(),
+    };
+
+    store.products[index] = updated;
+
+    persistStore();
+
+    response(res, updated, "Producto actualizado");
+  },
+);
 
 export default router;
