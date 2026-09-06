@@ -6,10 +6,11 @@ import {
 } from 'react';
 
 import {
-  Plus,
   Building2,
-  ReceiptText,
+  FileText,
   Pencil,
+  Plus,
+  ReceiptText,
   Trash2,
 } from 'lucide-react';
 
@@ -23,128 +24,183 @@ import {
   createId,
   formatDate,
   formatMoney,
+  formatQuantity,
 } from '../data/mock';
 
 const emptySupplier =
   () => ({
     businessName:
       '',
-
-    ruc: '',
-
-    phone: '',
-
-    email: '',
-
-    address: '',
-
-    notes: '',
-
+    ruc:
+      '',
+    phone:
+      '',
+    email:
+      '',
+    address:
+      '',
+    notes:
+      '',
     representatives:
       [],
   });
 
-const newLine = (
-  product,
-) => ({
-  id: createId(),
+const newLine =
+  (
+    product,
+  ) => ({
+    id:
+      createId(),
 
-  productId:
-    product?.id ||
-    '',
+    productId:
+      product?.id ||
+      '',
 
-  packages: 1,
+    packages:
+      '1',
 
-  contentQuantity:
-    Number(
-      product?.contentQuantity ||
-        1,
-    ),
-
-  purchasePrice:
-    Number(
-      product?.purchasePrice ||
-        0,
-    ),
-
-  lot: '',
-
-  expirationDate:
-    '',
-});
-
-const emptyPurchase = (
-  supplierId = '',
-  product = null,
-) => ({
-  supplierId,
-
-  documentType:
-    'Factura',
-
-  documentNumber:
-    '',
-
-  date:
-    new Date()
-      .toISOString()
-      .slice(
-        0,
-        10,
+    contentQuantity:
+      String(
+        product?.contentQuantity ||
+          1,
       ),
 
-  paymentMethod:
-    'Efectivo',
+    purchasePrice:
+      String(
+        product?.purchasePrice ||
+          '',
+      ),
 
-  paymentStatus:
-    'Pagado',
+    lot:
+      '',
 
-  notes: '',
+    expirationDate:
+      '',
+  });
 
-  documentName:
-    '',
+const emptyPurchase =
+  (
+    supplierId =
+      '',
 
-  documentMimeType:
-    '',
+    product =
+      null,
+  ) => ({
+    supplierId,
 
-  documentDataUrl:
-    '',
+    documentType:
+      'Factura',
 
-  detail: [
-    newLine(
-      product,
-    ),
-  ],
-});
+    documentNumber:
+      '',
+
+    date:
+      new Date()
+        .toISOString()
+        .slice(
+          0,
+          10,
+        ),
+
+    paymentMethod:
+      'Efectivo',
+
+    paymentStatus:
+      'Pagado',
+
+    notes:
+      '',
+
+    documentName:
+      '',
+
+    documentMimeType:
+      '',
+
+    documentDataUrl:
+      '',
+
+    detail: [
+      newLine(
+        product,
+      ),
+    ],
+  });
 
 export default function PurchasesView({
   purchases,
   suppliers,
   products,
   onSavePurchase,
+  onVoidPurchase,
   onSaveSupplier,
 }) {
   const [
     tab,
     setTab,
-  ] = useState(
-    'purchases',
-  );
+  ] =
+    useState(
+      'purchases',
+    );
 
   const [
     form,
     setForm,
-  ] = useState(null);
+  ] =
+    useState(
+      null,
+    );
 
   const [
     supplierForm,
     setSupplierForm,
-  ] = useState(null);
+  ] =
+    useState(
+      null,
+    );
 
   const [
     error,
     setError,
-  ] = useState('');
+  ] =
+    useState(
+      '',
+    );
+
+  const [
+    saving,
+    setSaving,
+  ] =
+    useState(
+      false,
+    );
+
+  const activeProducts =
+    useMemo(
+      () =>
+        products.filter(
+          (item) =>
+            item.active,
+        ),
+
+      [
+        products,
+      ],
+    );
+
+  const activeSuppliers =
+    useMemo(
+      () =>
+        suppliers.filter(
+          (item) =>
+            item.active !==
+            false,
+        ),
+
+      [
+        suppliers,
+      ],
+    );
 
   const productMap =
     useMemo(
@@ -159,7 +215,10 @@ export default function PurchasesView({
             ],
           ),
         ),
-      [products],
+
+      [
+        products,
+      ],
     );
 
   const total =
@@ -178,6 +237,7 @@ export default function PurchasesView({
                 line.purchasePrice ||
                   0,
               ),
+
           0,
         )
       : 0;
@@ -198,78 +258,203 @@ export default function PurchasesView({
                 line.contentQuantity ||
                   0,
               ),
+
           0,
         )
       : 0;
 
-  const updateLine = (
-    id,
-    field,
-    value,
-  ) => {
-    setForm(
-      (
-        current,
-      ) => ({
-        ...current,
+  const openPurchase =
+    () => {
+      setError(
+        '',
+      );
 
-        detail:
-          current.detail.map(
-            (
-              line,
-            ) => {
-              if (
-                line.id !==
-                id
-              ) {
-                return line;
-              }
+      setForm(
+        emptyPurchase(
+          activeSuppliers[0]
+            ?.id ||
+            '',
 
-              if (
-                field ===
-                'productId'
-              ) {
-                const product =
-                  productMap.get(
-                    value,
-                  );
+          activeProducts[0] ||
+            null,
+        ),
+      );
+    };
+
+  const updateLine =
+    (
+      id,
+      field,
+      value,
+    ) => {
+      setForm(
+        (
+          current,
+        ) => ({
+          ...current,
+
+          detail:
+            current.detail.map(
+              (
+                line,
+              ) => {
+                if (
+                  line.id !==
+                  id
+                ) {
+                  return line;
+                }
+
+                if (
+                  field ===
+                  'productId'
+                ) {
+                  const product =
+                    productMap.get(
+                      value,
+                    );
+
+                  return {
+                    ...line,
+
+                    productId:
+                      value,
+
+                    contentQuantity:
+                      String(
+                        product?.contentQuantity ||
+                          1,
+                      ),
+
+                    purchasePrice:
+                      String(
+                        product?.purchasePrice ||
+                          '',
+                      ),
+
+                    lot:
+                      '',
+
+                    expirationDate:
+                      '',
+                  };
+                }
 
                 return {
                   ...line,
 
-                  productId:
+                  [field]:
                     value,
-
-                  contentQuantity:
-                    Number(
-                      product?.contentQuantity ||
-                        1,
-                    ),
-
-                  purchasePrice:
-                    Number(
-                      product?.purchasePrice ||
-                        0,
-                    ),
-
-                  lot: '',
-
-                  expirationDate:
-                    '',
                 };
-              }
+              },
+            ),
+        }),
+      );
+    };
 
-              return {
-                ...line,
+  const addLine =
+    () => {
+      setForm(
+        (
+          current,
+        ) => ({
+          ...current,
 
-                [field]:
-                  value,
-              };
-            },
-          ),
-      }),
-    );
-  };
+          detail: [
+            ...current.detail,
+
+            newLine(
+              activeProducts[0] ||
+                null,
+            ),
+          ],
+        }),
+      );
+    };
+
+  const removeLine =
+    (
+      id,
+    ) => {
+      setForm(
+        (
+          current,
+        ) => ({
+          ...current,
+
+          detail:
+            current.detail
+              .length >
+            1
+              ? current.detail.filter(
+                  (
+                    line,
+                  ) =>
+                    line.id !==
+                    id,
+                )
+              : current.detail,
+        }),
+      );
+    };
+
+  const readDocument =
+    (
+      event,
+    ) => {
+      const file =
+        event.target
+          .files?.[0];
+
+      if (
+        !file
+      ) {
+        return;
+      }
+
+      if (
+        file.size >
+        1_800_000
+      ) {
+        setError(
+          'El comprobante debe pesar menos de 1.8 MB.',
+        );
+
+        event.target.value =
+          '';
+
+        return;
+      }
+
+      const reader =
+        new FileReader();
+
+      reader.onload =
+        () => {
+          setForm(
+            (
+              current,
+            ) => ({
+              ...current,
+
+              documentName:
+                file.name,
+
+              documentMimeType:
+                file.type,
+
+              documentDataUrl:
+                String(
+                  reader.result,
+                ),
+            }),
+          );
+        };
+
+      reader.readAsDataURL(
+        file,
+      );
+    };
 
   const submitPurchase =
     async (
@@ -277,7 +462,13 @@ export default function PurchasesView({
     ) => {
       event.preventDefault();
 
-      setError('');
+      setError(
+        '',
+      );
+
+      setSaving(
+        true,
+      );
 
       try {
         if (
@@ -323,79 +514,83 @@ export default function PurchasesView({
             }),
           );
 
-        if (
-          detail.some(
-            (
-              line,
-            ) =>
-              !line.productId,
-          )
-        ) {
-          throw new Error(
-            'Selecciona un producto en cada fila.',
-          );
-        }
-
-        if (
-          detail.some(
-            (
-              line,
-            ) =>
-              !Number.isFinite(
-                line.packages,
-              ) ||
-              line.packages <=
-                0,
-          )
-        ) {
-          throw new Error(
-            'La cantidad comprada debe ser mayor que cero.',
-          );
-        }
-
-        if (
-          detail.some(
-            (
-              line,
-            ) =>
-              !Number.isFinite(
-                line.contentQuantity,
-              ) ||
-              line.contentQuantity <=
-                0,
-          )
-        ) {
-          throw new Error(
-            'Las unidades por presentación deben ser mayores que cero.',
-          );
-        }
-
-        if (
-          detail.some(
-            (
-              line,
-            ) =>
-              !Number.isFinite(
-                line.purchasePrice,
-              ) ||
-              line.purchasePrice <=
-                0,
-          )
-        ) {
-          throw new Error(
-            'Todos los productos deben tener un costo válido.',
-          );
-        }
-
         await onSavePurchase({
           ...form,
+
+          paymentMethod:
+            'Efectivo',
+
+          paymentStatus:
+            'Pagado',
+
           detail,
         });
 
-        setForm(null);
-      } catch (error) {
+        setForm(
+          null,
+        );
+      } catch (
+        err
+      ) {
         setError(
-          error.message,
+          err.message,
+        );
+      } finally {
+        setSaving(
+          false,
+        );
+      }
+    };
+
+  const voidPurchase =
+    async (
+      purchase,
+    ) => {
+      if (
+        purchase.status ===
+        'voided'
+      ) {
+        return;
+      }
+
+      if (
+        !window.confirm(
+          `¿Anular ${purchase.number}? El stock se revertirá y el dinero regresará a caja.`,
+        )
+      ) {
+        return;
+      }
+
+      const reason =
+        window.prompt(
+          'Motivo de la anulación:',
+
+          'Compra registrada por error',
+        );
+
+      if (
+        reason ===
+        null
+      ) {
+        return;
+      }
+
+      setError(
+        '',
+      );
+
+      try {
+        await onVoidPurchase(
+          purchase.id,
+
+          reason.trim() ||
+            'Anulación de compra',
+        );
+      } catch (
+        err
+      ) {
+        setError(
+          err.message,
         );
       }
     };
@@ -406,7 +601,13 @@ export default function PurchasesView({
     ) => {
       event.preventDefault();
 
-      setError('');
+      setError(
+        '',
+      );
+
+      setSaving(
+        true,
+      );
 
       try {
         await onSaveSupplier(
@@ -416,34 +617,17 @@ export default function PurchasesView({
         setSupplierForm(
           null,
         );
-      } catch (error) {
+      } catch (
+        err
+      ) {
         setError(
-          error.message,
+          err.message,
+        );
+      } finally {
+        setSaving(
+          false,
         );
       }
-    };
-
-  const openPurchase =
-    () => {
-      setError('');
-
-      setForm(
-        emptyPurchase(
-          suppliers[0]
-            ?.id,
-
-          products[0],
-        ),
-      );
-    };
-
-  const openSupplier =
-    () => {
-      setError('');
-
-      setSupplierForm(
-        emptySupplier(),
-      );
     };
 
   return (
@@ -451,19 +635,25 @@ export default function PurchasesView({
       <PageTitle
         eyebrow="Abastecimiento"
         title="Compras y proveedores"
-        description="Cada compra aumenta el inventario y, cuando se paga en efectivo, descuenta automáticamente el dinero de la caja."
+        description="Toda compra registrada se paga en efectivo, aumenta el stock y descuenta automáticamente el total de la caja abierta."
         action={
           <button
+            type="button"
             className="btn-primary"
-            onClick={() =>
+            onClick={
               tab ===
               'purchases'
-                ? openPurchase()
-                : openSupplier()
+                ? openPurchase
+                : () =>
+                    setSupplierForm(
+                      emptySupplier(),
+                    )
             }
           >
             <Plus
-              size={18}
+              size={
+                18
+              }
             />
 
             {tab ===
@@ -474,9 +664,10 @@ export default function PurchasesView({
         }
       />
 
-      <div className="mb-5 flex w-fit rounded-2xl bg-black/5 p-1">
+      <div className="mb-5 flex gap-2 rounded-2xl bg-black/[0.035] p-1.5 sm:w-fit">
         <button
-          className={`rounded-xl px-4 py-2 text-sm font-black ${
+          type="button"
+          className={`rounded-xl px-4 py-2 text-sm font-bold ${
             tab ===
             'purchases'
               ? 'bg-white shadow-sm'
@@ -488,11 +679,19 @@ export default function PurchasesView({
             )
           }
         >
+          <ReceiptText
+            className="mr-2 inline"
+            size={
+              16
+            }
+          />
+
           Compras
         </button>
 
         <button
-          className={`rounded-xl px-4 py-2 text-sm font-black ${
+          type="button"
+          className={`rounded-xl px-4 py-2 text-sm font-bold ${
             tab ===
             'suppliers'
               ? 'bg-white shadow-sm'
@@ -504,144 +703,117 @@ export default function PurchasesView({
             )
           }
         >
+          <Building2
+            className="mr-2 inline"
+            size={
+              16
+            }
+          />
+
           Proveedores
         </button>
       </div>
 
+      {error && (
+        <p className="mb-4 rounded-2xl bg-coral/10 p-3 text-sm font-bold text-coral">
+          {error}
+        </p>
+      )}
+
       {tab ===
       'purchases' ? (
-        purchases.length ? (
-          <section className="grid gap-4 xl:grid-cols-2">
+        !purchases.length ? (
+          <div className="panel">
+            <EmptyState
+              text="Todavía no hay compras registradas."
+            />
+          </div>
+        ) : (
+          <div className="grid gap-4 lg:grid-cols-2">
             {purchases.map(
               (
                 purchase,
               ) => (
                 <article
-                  className="panel p-5"
                   key={
                     purchase.id
                   }
+                  className={`panel p-5 ${
+                    purchase.status ===
+                    'voided'
+                      ? 'opacity-60'
+                      : ''
+                  }`}
                 >
-                  <div className="flex justify-between gap-3">
-                    <div className="flex gap-3">
-                      <span className="grid size-11 place-items-center rounded-2xl bg-amber/20">
-                        <ReceiptText
-                          size={
-                            20
-                          }
-                        />
-                      </span>
-
-                      <div>
-                        <p className="text-xs font-black text-black/35">
-                          {
-                            purchase.documentType
-                          }
-                        </p>
-
-                        <h2 className="font-black">
-                          {
-                            purchase.documentNumber
-                          }
-                        </h2>
-                      </div>
-                    </div>
-
-                    <span className="badge bg-black/5">
-                      {
-                        purchase.number
-                      }
-                    </span>
-                  </div>
-
-                  <p className="mt-4 font-black">
-                    {
-                      purchase.supplier
-                    }
-                  </p>
-
-                  <div className="mt-4 grid grid-cols-2 gap-3 rounded-2xl bg-cream p-4 text-sm">
+                  <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-black/40">
-                        Fecha
+                      <p className="text-xs font-black uppercase tracking-[0.16em] text-forest">
+                        {
+                          purchase.number
+                        }
                       </p>
 
-                      <strong>
+                      <h3 className="mt-1 text-lg font-black">
+                        {
+                          purchase.supplier
+                        }
+                      </h3>
+
+                      <p className="mt-1 text-xs text-black/45">
+                        {
+                          purchase.documentType
+                        }{' '}
+                        {
+                          purchase.documentNumber
+                        }{' '}
+                        ·{' '}
                         {formatDate(
                           purchase.date,
                         )}
-                      </strong>
+                      </p>
                     </div>
 
-                    <div>
-                      <p className="text-black/40">
+                    <div className="text-right">
+                      <p className="text-xs text-black/40">
                         Total
                       </p>
 
-                      <strong>
+                      <p className="text-xl font-black">
                         {formatMoney(
                           purchase.total,
                         )}
-                      </strong>
-                    </div>
-
-                    <div>
-                      <p className="text-black/40">
-                        Unidades
                       </p>
-
-                      <strong>
-                        {
-                          purchase.items
-                        }
-                      </strong>
-                    </div>
-
-                    <div>
-                      <p className="text-black/40">
-                        Pago
-                      </p>
-
-                      <strong>
-                        {
-                          purchase.paymentMethod
-                        }
-                      </strong>
                     </div>
                   </div>
 
-                  {purchase.paymentStatus && (
-                    <p className="mt-3 text-xs font-bold text-black/45">
-                      Estado:{' '}
-                      {
-                        purchase.paymentStatus
-                      }
-                    </p>
-                  )}
-
                   <div className="mt-4 space-y-2">
-                    {(
-                      purchase.detail ||
-                      []
-                    ).map(
+                    {(purchase.detail ||
+                      []).map(
                       (
                         line,
-                        index,
                       ) => (
                         <div
-                          key={`${purchase.id}-${index}`}
-                          className="flex justify-between gap-3 text-sm"
+                          key={`${purchase.id}-${line.productId}`}
+                          className="flex justify-between gap-3 rounded-xl bg-black/[0.025] p-3 text-sm"
                         >
-                          <span>
-                            {
-                              line.productName
-                            }{' '}
-                            ·{' '}
-                            {
-                              line.units
-                            }{' '}
-                            und.
-                          </span>
+                          <div>
+                            <p className="font-bold">
+                              {
+                                line.productName
+                              }
+                            </p>
+
+                            <p className="mt-1 text-xs text-black/45">
+                              {formatQuantity(
+                                line.units,
+                              )}{' '}
+                              unidades ·
+                              costo unit.{' '}
+                              {formatMoney(
+                                line.unitCost,
+                              )}
+                            </p>
+                          </div>
 
                           <strong>
                             {formatMoney(
@@ -652,36 +824,111 @@ export default function PurchasesView({
                       ),
                     )}
                   </div>
+
+                  <div className="mt-4 rounded-xl bg-mint p-3 text-xs text-forest">
+                    <strong>
+                      Efectivo ·
+                      Pagado.
+                    </strong>{' '}
+                    Esta compra
+                    descontó{' '}
+                    {formatMoney(
+                      purchase.total,
+                    )}{' '}
+                    de caja.
+                  </div>
+
+                  {purchase.documentDataUrl && (
+                    <a
+                      href={
+                        purchase.documentDataUrl
+                      }
+                      target="_blank"
+                      rel="noreferrer"
+                      className="btn-secondary mt-3 w-full"
+                    >
+                      <FileText
+                        size={
+                          16
+                        }
+                      />
+
+                      Ver
+                      comprobante
+                    </a>
+                  )}
+
+                  {purchase.status ===
+                  'voided' ? (
+                    <div className="mt-4 rounded-xl bg-coral/10 p-3 text-xs font-bold text-coral">
+                      Compra
+                      anulada
+
+                      {purchase.voidReason
+                        ? ` · ${purchase.voidReason}`
+                        : ''}
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn-secondary mt-4 w-full text-coral"
+                      onClick={() =>
+                        voidPurchase(
+                          purchase,
+                        )
+                      }
+                    >
+                      <Trash2
+                        size={
+                          16
+                        }
+                      />
+
+                      Anular
+                      compra
+                    </button>
+                  )}
                 </article>
               ),
             )}
-          </section>
-        ) : (
-          <EmptyState text="Todavía no hay compras registradas" />
+          </div>
         )
-      ) : suppliers.length ? (
-        <section className="grid gap-4 xl:grid-cols-2">
+      ) : !suppliers.length ? (
+        <div className="panel">
+          <EmptyState
+            text="Todavía no hay proveedores registrados."
+          />
+        </div>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {suppliers.map(
             (
               supplier,
             ) => (
               <article
-                className="panel p-5"
                 key={
                   supplier.id
                 }
+                className="panel p-5"
               >
-                <div className="flex justify-between">
-                  <span className="grid size-11 place-items-center rounded-2xl bg-mint text-forest">
-                    <Building2
-                      size={
-                        20
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-lg font-black">
+                      {
+                        supplier.businessName
                       }
-                    />
-                  </span>
+                    </p>
+
+                    <p className="mt-1 text-xs text-black/45">
+                      RUC:{' '}
+                      {supplier.ruc ||
+                        '—'}
+                    </p>
+                  </div>
 
                   <button
-                    className="inline-flex items-center gap-2 text-xs font-black text-forest"
+                    type="button"
+                    className="rounded-xl p-2 hover:bg-black/5"
                     onClick={() => {
                       setError(
                         '',
@@ -694,51 +941,38 @@ export default function PurchasesView({
                   >
                     <Pencil
                       size={
-                        15
+                        17
                       }
                     />
-                    Editar
                   </button>
                 </div>
 
-                <h2 className="mt-4 text-lg font-black">
-                  {
-                    supplier.businessName
-                  }
-                </h2>
-
-                <p className="mt-2 text-sm text-black/45">
-                  RUC:{' '}
-                  {supplier.ruc ||
-                    '—'}
-                </p>
-
-                <p className="text-sm text-black/45">
-                  {supplier.phone ||
-                    'Sin teléfono'}{' '}
-                  ·{' '}
-                  {supplier.email ||
-                    'Sin correo'}
-                </p>
-
-                {supplier.address && (
-                  <p className="mt-2 text-sm text-black/45">
-                    {
-                      supplier.address
-                    }
+                <div className="mt-4 space-y-1 text-sm text-black/55">
+                  <p>
+                    {supplier.phone ||
+                      'Sin teléfono'}
                   </p>
-                )}
+
+                  <p>
+                    {supplier.email ||
+                      'Sin correo'}
+                  </p>
+
+                  <p>
+                    {supplier.address ||
+                      'Sin dirección'}
+                  </p>
+                </div>
               </article>
             ),
           )}
-        </section>
-      ) : (
-        <EmptyState text="Todavía no hay proveedores" />
+        </div>
       )}
 
       {form && (
         <Modal
           title="Registrar compra"
+          wide
           onClose={() => {
             setForm(
               null,
@@ -782,15 +1016,15 @@ export default function PurchasesView({
                     Selecciona
                   </option>
 
-                  {suppliers.map(
+                  {activeSuppliers.map(
                     (
                       supplier,
                     ) => (
                       <option
-                        value={
+                        key={
                           supplier.id
                         }
-                        key={
+                        value={
                           supplier.id
                         }
                       >
@@ -827,7 +1061,9 @@ export default function PurchasesView({
                   }
                 />
               </label>
+            </div>
 
+            <div className="grid gap-4 sm:grid-cols-2">
               <label className="text-sm font-bold">
                 Tipo de
                 comprobante
@@ -859,19 +1095,18 @@ export default function PurchasesView({
                   </option>
 
                   <option>
-                    Nota de
-                    venta
+                    Ticket
                   </option>
                 </select>
               </label>
 
               <label className="text-sm font-bold">
-                N.º documento
+                Número de
+                comprobante
 
                 <input
                   required
                   className="field mt-2"
-                  placeholder="F001-000123"
                   value={
                     form.documentNumber
                   }
@@ -891,159 +1126,130 @@ export default function PurchasesView({
               </label>
             </div>
 
-            <div>
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <div>
-                  <h3 className="font-black">
-                    Productos
-                    comprados
-                  </h3>
-
-                  <p className="text-xs text-black/40">
-                    Cada fila
-                    ingresará
-                    stock al
-                    inventario.
-                  </p>
-                </div>
+            <div className="rounded-3xl bg-black/[0.025] p-4">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <h3 className="font-black">
+                  Productos
+                  comprados
+                </h3>
 
                 <button
                   type="button"
-                  className="text-sm font-black text-forest"
-                  onClick={() =>
-                    setForm({
-                      ...form,
-
-                      detail: [
-                        ...form.detail,
-
-                        newLine(
-                          products[0],
-                        ),
-                      ],
-                    })
+                  className="btn-secondary"
+                  onClick={
+                    addLine
                   }
                 >
-                  + Agregar
-                  producto
+                  <Plus
+                    size={
+                      16
+                    }
+                  />
+
+                  Agregar
                 </button>
               </div>
 
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {form.detail.map(
                   (
                     line,
                     index,
                   ) => (
                     <div
-                      className="rounded-2xl bg-cream p-4"
                       key={
                         line.id
                       }
+                      className="rounded-2xl bg-white p-4 shadow-sm"
                     >
-                      <div className="flex justify-between">
+                      <div className="mb-3 flex items-center justify-between">
                         <strong>
                           Producto{' '}
                           {index +
                             1}
                         </strong>
 
-                        {form
-                          .detail
-                          .length >
-                          1 && (
-                          <button
-                            type="button"
-                            className="text-coral"
-                            onClick={() =>
-                              setForm({
-                                ...form,
-
-                                detail:
-                                  form.detail.filter(
-                                    (
-                                      item,
-                                    ) =>
-                                      item.id !==
-                                      line.id,
-                                  ),
-                              })
+                        <button
+                          type="button"
+                          className="rounded-xl p-2 text-coral hover:bg-coral/10"
+                          onClick={() =>
+                            removeLine(
+                              line.id,
+                            )
+                          }
+                          disabled={
+                            form
+                              .detail
+                              .length ===
+                            1
+                          }
+                        >
+                          <Trash2
+                            size={
+                              16
                             }
-                          >
-                            <Trash2
-                              size={
-                                17
-                              }
-                            />
-                          </button>
-                        )}
+                          />
+                        </button>
                       </div>
 
-                      <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                        <label className="text-xs font-bold">
-                          Producto
+                      <label className="block text-sm font-bold">
+                        Producto
 
-                          <select
-                            required
-                            className="field mt-1"
-                            value={
-                              line.productId
-                            }
-                            onChange={(
-                              e,
-                            ) =>
-                              updateLine(
-                                line.id,
-                                'productId',
-                                e
-                                  .target
-                                  .value,
-                              )
-                            }
-                          >
-                            <option value="">
-                              Selecciona
-                            </option>
+                        <select
+                          required
+                          className="field mt-2"
+                          value={
+                            line.productId
+                          }
+                          onChange={(
+                            e,
+                          ) =>
+                            updateLine(
+                              line.id,
 
-                            {products
-                              .filter(
-                                (
-                                  product,
-                                ) =>
-                                  product.active !==
-                                  false,
-                              )
-                              .map(
-                                (
-                                  product,
-                                ) => (
-                                  <option
-                                    key={
-                                      product.id
-                                    }
-                                    value={
-                                      product.id
-                                    }
-                                  >
-                                    {
-                                      product.name
-                                    }
-                                  </option>
-                                ),
-                              )}
-                          </select>
-                        </label>
+                              'productId',
 
-                        <label className="text-xs font-bold">
-                          Paquetes /
-                          presentaciones
+                              e
+                                .target
+                                .value,
+                            )
+                          }
+                        >
+                          <option value="">
+                            Selecciona
+                          </option>
+
+                          {activeProducts.map(
+                            (
+                              product,
+                            ) => (
+                              <option
+                                key={
+                                  product.id
+                                }
+                                value={
+                                  product.id
+                                }
+                              >
+                                {
+                                  product.name
+                                }
+                              </option>
+                            ),
+                          )}
+                        </select>
+                      </label>
+
+                      <div className="mt-4 grid gap-4 sm:grid-cols-3">
+                        <label className="text-sm font-bold">
+                          Presentaciones
 
                           <input
                             required
                             min="0.001"
                             step="0.001"
                             type="number"
-                            className="field mt-1"
+                            className="field mt-2"
                             value={
                               line.packages
                             }
@@ -1052,7 +1258,9 @@ export default function PurchasesView({
                             ) =>
                               updateLine(
                                 line.id,
+
                                 'packages',
+
                                 e
                                   .target
                                   .value,
@@ -1061,17 +1269,15 @@ export default function PurchasesView({
                           />
                         </label>
 
-                        <label className="text-xs font-bold">
-                          Unidades
-                          por
-                          presentación
+                        <label className="text-sm font-bold">
+                          Contenido
 
                           <input
                             required
                             min="0.001"
                             step="0.001"
                             type="number"
-                            className="field mt-1"
+                            className="field mt-2"
                             value={
                               line.contentQuantity
                             }
@@ -1080,7 +1286,9 @@ export default function PurchasesView({
                             ) =>
                               updateLine(
                                 line.id,
+
                                 'contentQuantity',
+
                                 e
                                   .target
                                   .value,
@@ -1089,7 +1297,7 @@ export default function PurchasesView({
                           />
                         </label>
 
-                        <label className="text-xs font-bold">
+                        <label className="text-sm font-bold">
                           Costo por
                           presentación
 
@@ -1098,7 +1306,7 @@ export default function PurchasesView({
                             min="0.01"
                             step="0.01"
                             type="number"
-                            className="field mt-1"
+                            className="field mt-2"
                             value={
                               line.purchasePrice
                             }
@@ -1107,7 +1315,9 @@ export default function PurchasesView({
                             ) =>
                               updateLine(
                                 line.id,
+
                                 'purchasePrice',
+
                                 e
                                   .target
                                   .value,
@@ -1115,12 +1325,14 @@ export default function PurchasesView({
                             }
                           />
                         </label>
+                      </div>
 
-                        <label className="text-xs font-bold">
+                      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                        <label className="text-sm font-bold">
                           Lote
 
                           <input
-                            className="field mt-1"
+                            className="field mt-2"
                             value={
                               line.lot
                             }
@@ -1129,7 +1341,9 @@ export default function PurchasesView({
                             ) =>
                               updateLine(
                                 line.id,
+
                                 'lot',
+
                                 e
                                   .target
                                   .value,
@@ -1138,12 +1352,12 @@ export default function PurchasesView({
                           />
                         </label>
 
-                        <label className="text-xs font-bold">
+                        <label className="text-sm font-bold">
                           Vencimiento
 
                           <input
                             type="date"
-                            className="field mt-1"
+                            className="field mt-2"
                             value={
                               line.expirationDate
                             }
@@ -1152,7 +1366,9 @@ export default function PurchasesView({
                             ) =>
                               updateLine(
                                 line.id,
+
                                 'expirationDate',
+
                                 e
                                   .target
                                   .value,
@@ -1171,76 +1387,21 @@ export default function PurchasesView({
               <label className="text-sm font-bold">
                 Forma de pago
 
-                <select
-                  className="field mt-2"
-                  value={
-                    form.paymentMethod
-                  }
-                  onChange={(
-                    e,
-                  ) => {
-                    const paymentMethod =
-                      e
-                        .target
-                        .value;
-
-                    setForm({
-                      ...form,
-
-                      paymentMethod,
-
-                      paymentStatus:
-                        paymentMethod ===
-                        'Efectivo'
-                          ? 'Pagado'
-                          : 'Pendiente',
-                    });
-                  }}
-                >
-                  <option>
-                    Efectivo
-                  </option>
-
-                  <option>
-                    Crédito
-                    proveedor
-                  </option>
-                </select>
+                <input
+                  readOnly
+                  className="field mt-2 bg-black/[0.03]"
+                  value="Efectivo"
+                />
               </label>
 
               <label className="text-sm font-bold">
                 Estado
 
-                <select
-                  className="field mt-2"
-                  value={
-                    form.paymentStatus
-                  }
-                  disabled={
-                    form.paymentMethod ===
-                    'Efectivo'
-                  }
-                  onChange={(
-                    e,
-                  ) =>
-                    setForm({
-                      ...form,
-
-                      paymentStatus:
-                        e
-                          .target
-                          .value,
-                    })
-                  }
-                >
-                  <option>
-                    Pagado
-                  </option>
-
-                  <option>
-                    Pendiente
-                  </option>
-                </select>
+                <input
+                  readOnly
+                  className="field mt-2 bg-black/[0.03]"
+                  value="Pagado"
+                />
               </label>
             </div>
 
@@ -1252,10 +1413,8 @@ export default function PurchasesView({
                 </span>
 
                 <strong>
-                  {Number(
-                    units.toFixed(
-                      3,
-                    ),
+                  {formatQuantity(
+                    units,
                   )}
                 </strong>
               </div>
@@ -1273,35 +1432,46 @@ export default function PurchasesView({
               </div>
             </div>
 
-            {form.paymentMethod ===
-              'Efectivo' && (
-              <div className="rounded-xl bg-amber/10 p-3 text-xs">
-                <strong>
-                  Importante:
-                </strong>{' '}
-                el total se
-                descontará
-                automáticamente
-                de la caja
-                abierta.
-              </div>
-            )}
+            <div className="rounded-xl bg-amber/10 p-3 text-xs">
+              <strong>
+                Importante:
+              </strong>{' '}
 
-            {form.paymentMethod ===
-              'Crédito proveedor' && (
-              <div className="rounded-xl bg-mint p-3 text-xs">
-                El stock
-                ingresará al
-                inventario,
-                pero no se
-                descontará
-                dinero de caja
-                porque la compra
-                quedará
-                pendiente de
-                pago.
-              </div>
-            )}
+              al registrar la
+              compra, el total
+              se descontará
+              automáticamente
+              de la caja
+              abierta. Si no
+              existe caja
+              abierta o no
+              alcanza el
+              efectivo, la
+              compra será
+              rechazada y el
+              stock no cambiará.
+            </div>
+
+            <label className="block text-sm font-bold">
+              Comprobante digital
+
+              <input
+                type="file"
+                accept="image/*,application/pdf"
+                className="field mt-2"
+                onChange={
+                  readDocument
+                }
+              />
+
+              {form.documentName && (
+                <p className="mt-1 text-xs text-forest">
+                  {
+                    form.documentName
+                  }
+                </p>
+              )}
+            </label>
 
             <label className="block text-sm font-bold">
               Notas
@@ -1333,9 +1503,15 @@ export default function PurchasesView({
               </p>
             )}
 
-            <button className="btn-primary w-full">
-              Registrar
-              compra
+            <button
+              className="btn-primary w-full"
+              disabled={
+                saving
+              }
+            >
+              {saving
+                ? 'Registrando...'
+                : `Registrar compra por ${formatMoney(total)}`}
             </button>
           </form>
         </Modal>
@@ -1518,9 +1694,15 @@ export default function PurchasesView({
               </p>
             )}
 
-            <button className="btn-primary w-full">
-              Guardar
-              proveedor
+            <button
+              className="btn-primary w-full"
+              disabled={
+                saving
+              }
+            >
+              {saving
+                ? 'Guardando...'
+                : 'Guardar proveedor'}
             </button>
           </form>
         </Modal>
