@@ -3,26 +3,37 @@
     "sequences": {
       "sale": 0,
       "purchase": 0,
-      "cashSession": 0
+      "cashSession": 5,
+      "customerAccount": 0
     },
-    "version": 2
+    "version": 5
   },
+  "sessions": [
+    {
+      "token": "ba354f969c62513993d77cb9e3acb169e0739bd763443d3a81e697b081fa9536",
+      "userId": "u2",
+      "createdAt": "2026-09-05T04:42:17.672Z",
+      "expiresAt": 1788626537672
+    }
+  ],
   "users": [
     {
       "id": "u1",
       "username": "admin",
       "name": "Administrador",
-      "passwordHash": "a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3",
+      "passwordHash": "scrypt$1d43da35b602556b42fb0c0e4f16e7b2$b18ea93c0da27504129a5037f67cc31e39abbd4915c91fade821c79672f59fe0115167009a7d9801571b5ee9cc14ea5bcb027351c0ee02cceb721a9d4cd73413",
       "role": "Administrador",
-      "active": true
+      "active": true,
+      "passwordUpdatedAt": "2026-09-05T02:17:23.084Z"
     },
     {
       "id": "u2",
       "username": "aydee",
       "name": "Aydee",
-      "passwordHash": "a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3",
+      "passwordHash": "scrypt$d2ae0683960c30dd5c79dfdda39975b7$67ab9362a14731448cafca6eec55c609942e8b8c7e117613e0868fe88a7111cebadc5aa09f9bf8b9e1956d796ce82f0edb730a32129173a4a9d2ebfee2e97bca",
       "role": "Vendedora",
-      "active": true
+      "active": true,
+      "passwordUpdatedAt": "2026-09-05T02:26:42.969Z"
     }
   ],
   "categories": [
@@ -113,7 +124,7 @@
       "purchaseQuantity": 28,
       "unitCost": 3.6,
       "salePrice": 4.5,
-      "stock": 28,
+      "stock": 23,
       "minStock": 8,
       "saleUnit": "unidad",
       "image": "",
@@ -161,10 +172,138 @@
       "createdAt": "2026-09-05T00:54:31.909Z"
     }
   ],
+  "customers": [
+    {
+      "id": "8b9bde08-1e6e-42a9-b3c1-a75716c28095",
+      "name": "nadia",
+      "dni": "7845123",
+      "phone": "987456321",
+      "address": "avenida amistad",
+      "notes": "padre",
+      "active": true,
+      "createdAt": "2026-09-05T02:27:11.659Z",
+      "createdBy": "u2"
+    }
+  ],
+  "customerCredits": [
+    {
+      "id": "8dac8ed2-166d-4110-a0f0-a61f036b918d",
+      "customerId": "8b9bde08-1e6e-42a9-b3c1-a75716c28095",
+      "productId": "p1",
+      "productName": "Leche Gloria Entera",
+      "barcode": "7750243051205",
+      "saleUnit": "unidad",
+      "quantity": 5,
+      "unitPrice": 4.5,
+      "unitCost": 3.6,
+      "total": 22.5,
+      "status": "active",
+      "notes": "",
+      "createdAt": "2026-09-05T02:27:41.642Z",
+      "createdBy": "u2"
+    }
+  ],
+  "customerPayments": [],
   "sales": [],
   "purchases": [],
   "expenses": [],
-  "inventoryMovements": [],
-  "cashMovements": [],
-  "cashSessions": []
+  "inventoryMovements": [
+    {
+      "id": "825e39e7-99b8-4bdd-93f3-ddf6c3c422e4",
+      "productId": "p1",
+      "productName": "Leche Gloria Entera",
+      "type": "salida",
+      "reasonType": "credito_cliente",
+      "reason": "Crédito a cliente: nadia",
+      "referenceType": "customer_credit",
+      "referenceId": "8dac8ed2-166d-4110-a0f0-a61f036b918d",
+      "quantity": 5,
+      "stockAfter": 23,
+      "date": "2026-09-05T02:27:41.642Z",
+      "createdBy": "u2"
+    }
+  ],
+  "cashMovements": [
+    {
+      "id": "b8970b77-0aeb-4b00-9f6b-5657306a4371",
+      "sessionId": "d5225cc4-c043-4072-bcd7-f011c1288b82",
+      "direction": "out",
+      "type": "withdrawal",
+      "amount": 200,
+      "reason": "Retiro de efectivo",
+      "notes": "",
+      "referenceType": "",
+      "referenceId": "",
+      "userId": "u1",
+      "status": "active",
+      "date": "2026-09-05T02:30:36.754Z"
+    }
+  ],
+  "cashSessions": [
+    {
+      "id": "c62185a8-94aa-40b1-bdc0-72b89ced9174",
+      "number": "CAJ-0001",
+      "status": "closed",
+      "openingAmount": 11000,
+      "openedAt": "2026-09-05T02:28:33.971Z",
+      "openedBy": "u1",
+      "closingAmount": 50000,
+      "expectedAmount": 11000,
+      "difference": 39000,
+      "closedAt": "2026-09-05T02:29:16.133Z",
+      "closedBy": "u1"
+    },
+    {
+      "id": "43910652-e4ec-4e71-ad3d-21d86921f6df",
+      "number": "CAJ-0002",
+      "status": "closed",
+      "openingAmount": 10000,
+      "openedAt": "2026-09-05T02:29:46.291Z",
+      "openedBy": "u1",
+      "closingAmount": 20000,
+      "expectedAmount": 10000,
+      "difference": 10000,
+      "closedAt": "2026-09-05T02:29:53.649Z",
+      "closedBy": "u1"
+    },
+    {
+      "id": "d5225cc4-c043-4072-bcd7-f011c1288b82",
+      "number": "CAJ-0003",
+      "status": "closed",
+      "openingAmount": 5000,
+      "openedAt": "2026-09-05T02:30:21.921Z",
+      "openedBy": "u1",
+      "closingAmount": 5000,
+      "expectedAmount": 4800,
+      "difference": 200,
+      "closedAt": "2026-09-05T02:30:48.561Z",
+      "closedBy": "u1"
+    },
+    {
+      "id": "00dbd381-ffcc-4339-83d0-73b89d5867fb",
+      "number": "CAJ-0004",
+      "status": "closed",
+      "openingAmount": 110000,
+      "openedAt": "2026-09-05T02:31:45.057Z",
+      "openedBy": "u1",
+      "closingAmount": 500000,
+      "expectedAmount": 110000,
+      "difference": 390000,
+      "closedAt": "2026-09-05T02:41:37.049Z",
+      "closedBy": "u1"
+    },
+    {
+      "id": "6b89f964-aad4-4796-91dc-69a7ade7f83a",
+      "number": "CAJ-0005",
+      "status": "open",
+      "openingAmount": 5000,
+      "openedAt": "2026-09-05T02:43:50.226Z",
+      "openedBy": "u1",
+      "closingAmount": null,
+      "expectedAmount": null,
+      "difference": null,
+      "closedAt": null,
+      "closedBy": null
+    }
+  ]
 }
