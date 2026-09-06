@@ -6,21 +6,18 @@ import {
 } from 'react';
 
 import {
-  BadgePercent,
   Barcode,
   Boxes,
-  CalendarClock,
   ImagePlus,
-  PackageOpen,
   Pencil,
   Plus,
   Search,
   ShieldCheck,
-  TrendingDown,
   TrendingUp,
 } from 'lucide-react';
 
 import {
+  EmptyState,
   Modal,
   PageTitle,
 } from '../components/ui';
@@ -30,69 +27,76 @@ import {
   formatQuantity,
 } from '../data/mock';
 
-const empty = {
-  barcode: '',
-  name: '',
-  description: '',
-  category: '',
-  categoryId: '',
-  brand: '',
-  brandId: '',
-
-  purchasePresentation: 'unidad',
-  purchasePrice: '',
-  contentQuantity: '1',
-  purchaseQuantity: '1',
-
-  unitCost: 0,
-  salePrice: '',
-  stock: '',
-  minStock: '5',
-  saleUnit: 'unidad',
-
-  image: '',
-
-  expirationDate: '',
-  sanitaryRegistration: '',
-  lot: '',
-
-  active: true,
+const emptyProduct = {
+  barcode:
+    '',
+  name:
+    '',
+  description:
+    '',
+  categoryId:
+    '',
+  brandId:
+    '',
+  purchasePresentation:
+    'unidad',
+  purchasePrice:
+    '',
+  contentQuantity:
+    '1',
+  purchaseQuantity:
+    '1',
+  salePrice:
+    '',
+  minStock:
+    '5',
+  saleUnit:
+    'unidad',
+  image:
+    '',
+  expirationDate:
+    '',
+  sanitaryRegistration:
+    '',
+  lot:
+    '',
+  active:
+    true,
 };
 
-const presentationNames = {
-  unidad: 'unidad',
-  paquete: 'paquete',
-  saco: 'saco',
-};
-
-const saleUnitNames = {
-  unidad: 'unidades',
-  kg: 'kg',
-};
-
-const calculateProfit = (
+const profitInfo = (
   salePrice,
-  cost
+  unitCost,
 ) => {
+  const sale =
+    Number(
+      salePrice ||
+        0,
+    );
+
+  const cost =
+    Number(
+      unitCost ||
+        0,
+    );
+
   const amount =
-    Number(salePrice || 0) -
-    Number(cost || 0);
+    sale -
+    cost;
 
   const percentage =
-    Number(cost) > 0
-      ? (amount / Number(cost)) * 100
+    cost >
+    0
+      ? (
+          amount /
+          cost
+        ) *
+        100
       : 0;
 
   return {
-    amount:
-      Number.isFinite(amount)
-        ? amount
-        : 0,
-
-    percentage:
-      Number.isFinite(percentage)
-        ? percentage
-        : 0,
+    amount,
+    percentage,
   };
 };
 
@@ -102,504 +106,640 @@ export default function ProductsView({
   brands = [],
   onSave,
 }) {
-  const [search, setSearch] =
-    useState('');
+  const [
+    search,
+    setSearch,
+  ] =
+    useState(
+      '',
+    );
 
-  const [editing, setEditing] =
-    useState(null);
+  const [
+    editing,
+    setEditing,
+  ] =
+    useState(
+      null,
+    );
 
-  const categoryName = (id) =>
-    categories.find(
-      (item) => item.id === id
-    )?.name || 'Sin categoría';
+  const [
+    error,
+    setError,
+  ] =
+    useState(
+      '',
+    );
 
-  const brandName = (id) =>
-    brands.find(
-      (item) => item.id === id
-    )?.name || 'Sin marca';
+  const [
+    saving,
+    setSaving,
+  ] =
+    useState(
+      false,
+    );
 
-  const filtered = useMemo(
-    () =>
-      products.filter((product) =>
-        `
-          ${product.name || ''}
-          ${product.barcode || ''}
-          ${categoryName(
-            product.categoryId
-          )}
-          ${brandName(
-            product.brandId
-          )}
-          ${product.lot || ''}
-          ${
-            product.sanitaryRegistration ||
-            ''
-          }
-        `
-          .toLowerCase()
-          .includes(
-            search.toLowerCase()
-          )
-      ),
-    [
-      products,
-      categories,
-      brands,
-      search,
-    ]
-  );
-
-  const open = (product = empty) => {
-    setEditing({
-      ...empty,
-      ...product,
-
-      purchaseQuantity:
-        product.purchaseQuantity ||
-        '1',
-
-      contentQuantity:
-        product.contentQuantity ||
-        '1',
-
-      saleUnit:
-        product.saleUnit ||
-        product.unit ||
-        'unidad',
-
-      expirationDate:
-        product.expirationDate ||
-        '',
-
-      sanitaryRegistration:
-        product.sanitaryRegistration ||
-        '',
-
-      lot:
-        product.lot || '',
-    });
-  };
-
-  const unitCost = editing
-    ? Number(
-        editing.purchasePrice || 0
-      ) /
-      Math.max(
-        Number(
-          editing.contentQuantity ||
-            1
-        ),
-        1
-      )
-    : 0;
-
-  const calculatedStock = editing
-    ? Number(
-        editing.purchaseQuantity ||
-          0
-      ) *
-      Number(
-        editing.contentQuantity ||
-          0
-      )
-    : 0;
-
-  const profit = calculateProfit(
-    editing?.salePrice,
-    unitCost
-  );
-
-  const changePresentation = (
-    value
-  ) => {
-    const next = {
-      ...editing,
-      purchasePresentation: value,
-    };
-
-    if (value === 'unidad') {
-      next.contentQuantity = '1';
-    }
-
-    if (value === 'saco') {
-      next.saleUnit = 'kg';
-    }
-
-    setEditing(next);
-  };
-
-  const loadImage = (event) => {
-    const file =
-      event.target.files?.[0];
-
-    if (!file) {
-      return;
-    }
-
-    if (
-      file.size >
-      1024 * 1024
-    ) {
-      window.alert(
-        'La imagen debe pesar como máximo 1 MB.'
-      );
-
-      event.target.value = '';
-
-      return;
-    }
-
-    const reader =
-      new FileReader();
-
-    reader.onload = () => {
-      setEditing((current) => ({
-        ...current,
-        image: String(
-          reader.result
-        ),
-      }));
-    };
-
-    reader.readAsDataURL(file);
-  };
-
-  const submit = async (
-    event
-  ) => {
-    event.preventDefault();
-
-    const isNew = !editing.id;
-
-    const selectedCategory =
+  const categoryName =
+    (id) =>
       categories.find(
         (item) =>
           item.id ===
-          editing.categoryId
-      );
+          id,
+      )?.name ||
+      'Sin categoría';
 
-    const selectedBrand =
+  const brandName =
+    (id) =>
       brands.find(
         (item) =>
           item.id ===
-          editing.brandId
-      );
+          id,
+      )?.name ||
+      'Sin marca';
 
-    if (!selectedCategory) {
-      window.alert(
-        'Selecciona una categoría válida.'
-      );
+  const filtered =
+    useMemo(
+      () => {
+        const term =
+          search
+            .trim()
+            .toLowerCase();
 
-      return;
-    }
+        return products.filter(
+          (
+            product,
+          ) =>
+            `${product.name || ''} ${product.barcode || ''} ${categoryName(product.categoryId)} ${brandName(product.brandId)} ${product.lot || ''}`
+              .toLowerCase()
+              .includes(
+                term,
+              ),
+        );
+      },
 
-    const product = {
-      ...editing,
+      [
+        products,
+        categories,
+        brands,
+        search,
+      ],
+    );
 
-      category:
-        selectedCategory.name,
-
-      brand:
-        selectedBrand?.name || '',
-
-      purchasePrice: Number(
-        editing.purchasePrice
-      ),
-
-      contentQuantity: Number(
-        editing.contentQuantity
-      ),
-
-      purchaseQuantity: Number(
-        editing.purchaseQuantity
-      ),
-
-      unitCost: Number(
-        unitCost.toFixed(4)
-      ),
-
-      salePrice: Number(
-        editing.salePrice
-      ),
-
-      stock: isNew
-        ? Number(
-            calculatedStock.toFixed(
-              3
-            )
-          )
-        : Number(editing.stock),
-
-      minStock: Number(
-        editing.minStock
-      ),
-
-      expirationDate:
-        editing.expirationDate ||
+  const open =
+    (
+      product =
+        null,
+    ) => {
+      setError(
         '',
+      );
 
-      sanitaryRegistration:
-        String(
-          editing.sanitaryRegistration ||
-            ''
-        ).trim(),
+      setEditing(
+        product
+          ? {
+              ...emptyProduct,
 
-      lot: String(
-        editing.lot || ''
-      ).trim(),
+              ...product,
+
+              purchasePrice:
+                String(
+                  product.purchasePrice ??
+                    '',
+                ),
+
+              contentQuantity:
+                String(
+                  product.contentQuantity ??
+                    1,
+                ),
+
+              purchaseQuantity:
+                String(
+                  product.purchaseQuantity ??
+                    1,
+                ),
+
+              salePrice:
+                String(
+                  product.salePrice ??
+                    '',
+                ),
+
+              minStock:
+                String(
+                  product.minStock ??
+                    0,
+                ),
+            }
+          : {
+              ...emptyProduct,
+
+              categoryId:
+                categories.find(
+                  (
+                    item,
+                  ) =>
+                    item.active,
+                )?.id ||
+                '',
+
+              brandId:
+                brands.find(
+                  (
+                    item,
+                  ) =>
+                    item.active,
+                )?.id ||
+                '',
+            },
+      );
     };
 
-    await onSave(product);
+  const calculatedUnitCost =
+    editing
+      ? Number(
+          editing.purchasePrice ||
+            0,
+        ) /
+        Math.max(
+          Number(
+            editing.contentQuantity ||
+              1,
+          ),
+          1,
+        )
+      : 0;
 
-    setEditing(null);
-  };
+  const displayUnitCost =
+    editing?.id
+      ? Number(
+          editing.unitCost ||
+            0,
+        )
+      : calculatedUnitCost;
+
+  const calculatedInitialStock =
+    editing
+      ? Number(
+          editing.purchaseQuantity ||
+            0,
+        ) *
+        Number(
+          editing.contentQuantity ||
+            0,
+        )
+      : 0;
+
+  const profit =
+    profitInfo(
+      editing?.salePrice,
+
+      displayUnitCost,
+    );
+
+  const setField =
+    (
+      field,
+      value,
+    ) => {
+      setEditing(
+        (
+          current,
+        ) => ({
+          ...current,
+
+          [field]:
+            value,
+        }),
+      );
+    };
+
+  const loadImage =
+    (
+      event,
+    ) => {
+      const file =
+        event.target
+          .files?.[0];
+
+      if (
+        !file
+      ) {
+        return;
+      }
+
+      if (
+        file.size >
+        1024 *
+          1024
+      ) {
+        setError(
+          'La imagen debe pesar como máximo 1 MB.',
+        );
+
+        event.target.value =
+          '';
+
+        return;
+      }
+
+      const reader =
+        new FileReader();
+
+      reader.onload =
+        () =>
+          setField(
+            'image',
+
+            String(
+              reader.result,
+            ),
+          );
+
+      reader.readAsDataURL(
+        file,
+      );
+    };
+
+  const submit =
+    async (
+      event,
+    ) => {
+      event.preventDefault();
+
+      setError(
+        '',
+      );
+
+      setSaving(
+        true,
+      );
+
+      try {
+        if (
+          !editing.categoryId
+        ) {
+          throw new Error(
+            'Selecciona una categoría.',
+          );
+        }
+
+        if (
+          !editing.barcode.trim()
+        ) {
+          throw new Error(
+            'Ingresa un código de barras.',
+          );
+        }
+
+        if (
+          !editing.name.trim()
+        ) {
+          throw new Error(
+            'Ingresa el nombre del producto.',
+          );
+        }
+
+        /*
+         * NO enviamos
+         * stock ni
+         * unitCost.
+         */
+        const payload = {
+          id:
+            editing.id,
+
+          barcode:
+            editing.barcode.trim(),
+
+          name:
+            editing.name.trim(),
+
+          description:
+            editing.description ||
+            '',
+
+          categoryId:
+            editing.categoryId,
+
+          brandId:
+            editing.brandId ||
+            '',
+
+          purchasePresentation:
+            editing.purchasePresentation ||
+            'unidad',
+
+          purchasePrice:
+            Number(
+              editing.purchasePrice,
+            ),
+
+          contentQuantity:
+            Number(
+              editing.contentQuantity,
+            ),
+
+          purchaseQuantity:
+            Number(
+              editing.purchaseQuantity,
+            ),
+
+          salePrice:
+            Number(
+              editing.salePrice,
+            ),
+
+          minStock:
+            Number(
+              editing.minStock,
+            ),
+
+          saleUnit:
+            editing.saleUnit ||
+            'unidad',
+
+          image:
+            editing.image ||
+            '',
+
+          expirationDate:
+            editing.expirationDate ||
+            '',
+
+          sanitaryRegistration:
+            String(
+              editing.sanitaryRegistration ||
+                '',
+            ).trim(),
+
+          lot:
+            String(
+              editing.lot ||
+                '',
+            ).trim(),
+
+          active:
+            editing.active !==
+            false,
+        };
+
+        await onSave(
+          payload,
+        );
+
+        setEditing(
+          null,
+        );
+      } catch (
+        err
+      ) {
+        setError(
+          err.message,
+        );
+      } finally {
+        setSaving(
+          false,
+        );
+      }
+    };
 
   return (
     <>
       <PageTitle
         eyebrow="Catálogo"
         title="Productos"
-        description="Registra cómo compras cada producto y cómo lo vendes; el sistema convertirá paquetes o sacos a unidades y kilos."
+        description="Administra la información comercial. El stock se modifica únicamente mediante compras, ventas, créditos o inventario."
         action={
           <button
+            type="button"
             className="btn-primary"
-            onClick={() => open()}
+            onClick={() =>
+              open()
+            }
           >
-            <Plus size={18} />
+            <Plus
+              size={
+                18
+              }
+            />
+
             Nuevo producto
           </button>
         }
       />
 
-      <section className="panel overflow-hidden">
-        <div className="border-b border-black/5 p-5">
-          <div className="relative max-w-lg">
-            <Search
-              className="absolute left-4 top-3.5 text-black/30"
-              size={19}
-            />
+      <div className="panel mb-5 p-4">
+        <div className="relative max-w-xl">
+          <Search
+            className="absolute left-3 top-3 text-black/30"
+            size={
+              18
+            }
+          />
 
-            <input
-              className="field pl-11"
-              placeholder="Buscar por producto, código, categoría, marca o lote"
-              value={search}
-              onChange={(event) =>
-                setSearch(
-                  event.target.value
-                )
-              }
-            />
-          </div>
+          <input
+            className="field pl-10"
+            placeholder="Buscar producto..."
+            value={
+              search
+            }
+            onChange={(
+              e,
+            ) =>
+              setSearch(
+                e
+                  .target
+                  .value,
+              )
+            }
+          />
         </div>
+      </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[1020px] text-left text-sm">
-            <thead className="bg-cream text-xs uppercase tracking-wider text-black/40">
-              <tr>
-                <th className="p-4">
-                  Producto
-                </th>
+      {!filtered.length ? (
+        <div className="panel">
+          <EmptyState
+            text="No hay productos para mostrar."
+          />
+        </div>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {filtered.map(
+            (
+              product,
+            ) => {
+              const currentProfit =
+                profitInfo(
+                  product.salePrice,
 
-                <th className="p-4">
-                  Categoría / marca
-                </th>
+                  product.unitCost,
+                );
 
-                <th className="p-4">
-                  Compra
-                </th>
+              const low =
+                Number(
+                  product.stock,
+                ) <=
+                Number(
+                  product.minStock,
+                );
 
-                <th className="p-4">
-                  Costo real
-                </th>
+              return (
+                <article
+                  key={
+                    product.id
+                  }
+                  className="panel overflow-hidden p-5"
+                >
+                  <div className="flex gap-4">
+                    <div className="grid size-20 shrink-0 place-items-center overflow-hidden rounded-2xl bg-black/[0.035]">
+                      {product.image ? (
+                        <img
+                          src={
+                            product.image
+                          }
+                          alt={
+                            product.name
+                          }
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <Boxes
+                          className="text-black/20"
+                          size={
+                            30
+                          }
+                        />
+                      )}
+                    </div>
 
-                <th className="p-4">
-                  Venta / ganancia
-                </th>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="truncate text-lg font-black">
+                            {
+                              product.name
+                            }
+                          </p>
 
-                <th className="p-4">
-                  Stock
-                </th>
-
-                <th className="p-4" />
-              </tr>
-            </thead>
-
-            <tbody className="divide-y divide-black/5">
-              {filtered.map(
-                (product) => {
-                  const productProfit =
-                    calculateProfit(
-                      product.salePrice,
-
-                      product.unitCost ??
-                        product.purchasePrice
-                    );
-
-                  return (
-                    <tr
-                      key={product.id}
-                      className="hover:bg-cream/60"
-                    >
-                      <td className="p-4">
-                        <div className="flex items-center gap-3">
-                          {product.image ? (
-                            <img
-                              className="size-12 rounded-xl object-cover"
-                              src={
-                                product.image
-                              }
-                              alt=""
-                            />
-                          ) : (
-                            <span className="grid size-12 place-items-center rounded-xl bg-cream text-black/25">
-                              <PackageOpen
-                                size={20}
-                              />
-                            </span>
-                          )}
-
-                          <div>
-                            <p className="font-bold">
-                              {
-                                product.name
-                              }
-                            </p>
-
-                            <p className="mt-1 flex items-center gap-1 text-xs text-black/35">
-                              <Barcode
-                                size={13}
-                              />
-
-                              {
-                                product.barcode
-                              }
-                            </p>
-
-                            {product.lot && (
-                              <p className="mt-1 text-xs text-black/40">
-                                Lote:{' '}
-                                {
-                                  product.lot
-                                }
-                              </p>
-                            )}
-                          </div>
+                          <p className="mt-1 text-xs text-black/40">
+                            {
+                              product.barcode
+                            }
+                          </p>
                         </div>
-                      </td>
 
-                      <td className="p-4">
-                        <p className="font-bold">
-                          {categoryName(
-                            product.categoryId
-                          )}
-                        </p>
-
-                        <p className="mt-1 text-xs text-black/40">
-                          {brandName(
-                            product.brandId
-                          )}
-                        </p>
-                      </td>
-
-                      <td className="p-4">
-                        <p>
-                          {formatMoney(
-                            product.purchasePrice
-                          )}{' '}
-                          /{' '}
-                          {presentationNames[
-                            product
-                              .purchasePresentation
-                          ] || 'unidad'}
-                        </p>
-
-                        <p className="mt-1 text-xs text-black/40">
-                          Contiene{' '}
-                          {formatQuantity(
-                            product.contentQuantity ||
-                              1
-                          )}{' '}
-                          {saleUnitNames[
-                            product.saleUnit
-                          ] ||
-                            product.saleUnit}
-                        </p>
-                      </td>
-
-                      <td className="p-4">
-                        {formatMoney(
-                          product.unitCost ??
-                            product.purchasePrice
-                        )}{' '}
-                        /{' '}
-                        {product.saleUnit ===
-                        'kg'
-                          ? 'kg'
-                          : 'unidad'}
-                      </td>
-
-                      <td className="p-4">
-                        <p className="font-black">
-                          {formatMoney(
-                            product.salePrice
-                          )}
-                        </p>
-
-                        <p
-                          className={`mt-1 text-xs font-bold ${
-                            productProfit.percentage <
-                            0
-                              ? 'text-coral'
-                              : 'text-forest'
-                          }`}
-                        >
-                          {productProfit.percentage.toFixed(
-                            2
-                          )}
-                          % de ganancia
-                        </p>
-                      </td>
-
-                      <td className="p-4">
-                        <span
-                          className={`badge ${
-                            product.stock <=
-                            product.minStock
-                              ? 'bg-coral/10 text-coral'
-                              : 'bg-mint text-forest'
-                          }`}
-                        >
-                          {formatQuantity(
-                            product.stock
-                          )}{' '}
-                          {saleUnitNames[
-                            product.saleUnit
-                          ] ||
-                            product.saleUnit}
-                        </span>
-                      </td>
-
-                      <td className="p-4">
                         <button
+                          type="button"
                           className="rounded-xl p-2 hover:bg-black/5"
                           onClick={() =>
-                            open(product)
+                            open(
+                              product,
+                            )
                           }
-                          aria-label={`Editar ${product.name}`}
                         >
                           <Pencil
-                            size={17}
+                            size={
+                              17
+                            }
                           />
                         </button>
-                      </td>
-                    </tr>
-                  );
-                }
-              )}
-            </tbody>
-          </table>
+                      </div>
+
+                      <div className="mt-3 flex flex-wrap gap-2 text-xs font-bold">
+                        <span className="rounded-full bg-mint px-2.5 py-1 text-forest">
+                          {categoryName(
+                            product.categoryId,
+                          )}
+                        </span>
+
+                        <span className="rounded-full bg-black/[0.04] px-2.5 py-1">
+                          {brandName(
+                            product.brandId,
+                          )}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-5 grid grid-cols-3 gap-2 text-center">
+                    <div
+                      className={`
+                        rounded-2xl p-3
+
+                        ${
+                          low
+                            ? 'bg-coral/10 text-coral'
+                            : 'bg-black/[0.03]'
+                        }
+                      `}
+                    >
+                      <p className="text-xs opacity-60">
+                        Stock
+                      </p>
+
+                      <p className="mt-1 font-black">
+                        {formatQuantity(
+                          product.stock,
+                        )}
+                      </p>
+                    </div>
+
+                    <div className="rounded-2xl bg-black/[0.03] p-3">
+                      <p className="text-xs text-black/45">
+                        Costo
+                      </p>
+
+                      <p className="mt-1 font-black">
+                        {formatMoney(
+                          product.unitCost,
+                        )}
+                      </p>
+                    </div>
+
+                    <div className="rounded-2xl bg-forest p-3 text-white">
+                      <p className="text-xs text-white/60">
+                        Venta
+                      </p>
+
+                      <p className="mt-1 font-black">
+                        {formatMoney(
+                          product.salePrice,
+                        )}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 flex items-center justify-between rounded-2xl bg-amber/10 p-3 text-sm">
+                    <span className="flex items-center gap-2 font-bold">
+                      <TrendingUp
+                        size={
+                          16
+                        }
+                      />
+
+                      Margen
+                    </span>
+
+                    <strong>
+                      {formatMoney(
+                        currentProfit.amount,
+                      )}{' '}
+                      ·{' '}
+                      {Number(
+                        currentProfit.percentage ||
+                          0,
+                      ).toFixed(
+                        1,
+                      )}
+                      %
+                    </strong>
+                  </div>
+                </article>
+              );
+            },
+          )}
         </div>
-      </section>
+      )}
 
       {editing && (
         <Modal
@@ -608,261 +748,244 @@ export default function ProductsView({
               ? 'Editar producto'
               : 'Nuevo producto'
           }
-          onClose={() =>
-            setEditing(null)
-          }
           wide
+          onClose={() => {
+            setEditing(
+              null,
+            );
+
+            setError(
+              '',
+            );
+          }}
         >
           <form
-            className="space-y-6"
-            onSubmit={submit}
+            className="space-y-5"
+            onSubmit={
+              submit
+            }
           >
-            <section>
-              <h3 className="flex items-center gap-2 font-black">
-                <Barcode
-                  size={18}
-                  className="text-forest"
-                />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="text-sm font-bold">
+                Código de barras
 
-                Datos del producto
-              </h3>
-
-              <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                <label className="text-sm font-bold">
-                  Nombre del producto
-
-                  <input
-                    required
-                    className="field mt-2"
-                    value={editing.name}
-                    onChange={(event) =>
-                      setEditing({
-                        ...editing,
-
-                        name:
-                          event.target
-                            .value,
-                      })
+                <div className="relative mt-2">
+                  <Barcode
+                    className="absolute left-3 top-3 text-black/30"
+                    size={
+                      18
                     }
                   />
-                </label>
-
-                <label className="text-sm font-bold">
-                  Código de barras
 
                   <input
                     required
-                    inputMode="numeric"
-                    className="field mt-2"
+                    className="field pl-10"
                     value={
                       editing.barcode
                     }
-                    onChange={(event) =>
-                      setEditing({
-                        ...editing,
+                    onChange={(
+                      e,
+                    ) =>
+                      setField(
+                        'barcode',
 
-                        barcode:
-                          event.target.value.replace(
-                            /\D/g,
-                            ''
-                          ),
-                      })
+                        e
+                          .target
+                          .value,
+                      )
                     }
                   />
-                </label>
+                </div>
+              </label>
 
-                <label className="text-sm font-bold">
-                  Categoría
+              <label className="text-sm font-bold">
+                Nombre
 
-                  <select
-                    required
-                    className="field mt-2"
-                    value={
-                      editing.categoryId
-                    }
-                    onChange={(event) =>
-                      setEditing({
-                        ...editing,
+                <input
+                  required
+                  className="field mt-2"
+                  value={
+                    editing.name
+                  }
+                  onChange={(
+                    e,
+                  ) =>
+                    setField(
+                      'name',
 
-                        categoryId:
-                          event.target
-                            .value,
-                      })
-                    }
-                  >
-                    <option value="">
-                      Selecciona una
-                      categoría
-                    </option>
-
-                    {categories
-                      .filter(
-                        (item) =>
-                          item.active !==
-                          false
-                      )
-                      .map((item) => (
-                        <option
-                          key={item.id}
-                          value={item.id}
-                        >
-                          {item.name}
-                        </option>
-                      ))}
-                  </select>
-                </label>
-
-                <label className="text-sm font-bold">
-                  Marca
-
-                  <select
-                    className="field mt-2"
-                    value={
-                      editing.brandId
-                    }
-                    onChange={(event) =>
-                      setEditing({
-                        ...editing,
-
-                        brandId:
-                          event.target
-                            .value,
-                      })
-                    }
-                  >
-                    <option value="">
-                      Sin marca
-                    </option>
-
-                    {brands
-                      .filter(
-                        (item) =>
-                          item.active !==
-                          false
-                      )
-                      .map((item) => (
-                        <option
-                          key={item.id}
-                          value={item.id}
-                        >
-                          {item.name}
-                        </option>
-                      ))}
-                  </select>
-                </label>
-
-                <label className="sm:col-span-2 text-sm font-bold">
-                  Descripción
-
-                  <textarea
-                    rows="3"
-                    className="field mt-2 resize-none"
-                    placeholder="Presentación, tamaño, sabor u otra información útil"
-                    value={
-                      editing.description
-                    }
-                    onChange={(event) =>
-                      setEditing({
-                        ...editing,
-
-                        description:
-                          event.target
-                            .value,
-                      })
-                    }
-                  />
-                </label>
-
-                <label className="sm:col-span-2 text-sm font-bold">
-                  Imagen del producto
-
-                  <div className="mt-2 flex items-center gap-4 rounded-2xl border border-dashed border-black/15 bg-white p-4">
-                    {editing.image ? (
-                      <img
-                        className="size-20 rounded-2xl object-cover"
-                        src={
-                          editing.image
-                        }
-                        alt="Vista previa del producto"
-                      />
-                    ) : (
-                      <span className="grid size-20 place-items-center rounded-2xl bg-cream text-black/30">
-                        <ImagePlus
-                          size={28}
-                        />
-                      </span>
-                    )}
-
-                    <div>
-                      <input
-                        id="product-image"
-                        className="sr-only"
-                        type="file"
-                        accept="image/png,image/jpeg,image/webp"
-                        onChange={
-                          loadImage
-                        }
-                      />
-
-                      <label
-                        htmlFor="product-image"
-                        className="btn-secondary cursor-pointer px-4 py-2 text-sm"
-                      >
-                        <ImagePlus
-                          size={17}
-                        />
-
-                        Elegir imagen
-                      </label>
-
-                      <p className="mt-2 text-xs text-black/40">
-                        JPG, PNG o WebP ·
-                        máximo 1 MB
-                      </p>
-                    </div>
-                  </div>
-                </label>
-              </div>
-            </section>
-
-            <section className="rounded-3xl border border-black/5 bg-white p-5">
-              <h3 className="flex items-center gap-2 font-black">
-                <Boxes
-                  size={18}
-                  className="text-forest"
+                      e
+                        .target
+                        .value,
+                    )
+                  }
                 />
+              </label>
+            </div>
 
-                Compra y conversión de
-                stock
-              </h3>
+            <label className="block text-sm font-bold">
+              Descripción
 
-              <p className="mt-1 text-sm text-black/45">
-                Indica cómo lo entrega el
-                proveedor y en qué medida
-                se vende al cliente.
+              <textarea
+                className="field mt-2"
+                rows="2"
+                value={
+                  editing.description ||
+                  ''
+                }
+                onChange={(
+                  e,
+                ) =>
+                  setField(
+                    'description',
+
+                    e
+                      .target
+                      .value,
+                  )
+                }
+              />
+            </label>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="text-sm font-bold">
+                Categoría
+
+                <select
+                  required
+                  className="field mt-2"
+                  value={
+                    editing.categoryId
+                  }
+                  onChange={(
+                    e,
+                  ) =>
+                    setField(
+                      'categoryId',
+
+                      e
+                        .target
+                        .value,
+                    )
+                  }
+                >
+                  <option value="">
+                    Selecciona
+                  </option>
+
+                  {categories
+                    .filter(
+                      (
+                        item,
+                      ) =>
+                        item.active,
+                    )
+                    .map(
+                      (
+                        item,
+                      ) => (
+                        <option
+                          key={
+                            item.id
+                          }
+                          value={
+                            item.id
+                          }
+                        >
+                          {
+                            item.name
+                          }
+                        </option>
+                      ),
+                    )}
+                </select>
+              </label>
+
+              <label className="text-sm font-bold">
+                Marca
+
+                <select
+                  className="field mt-2"
+                  value={
+                    editing.brandId ||
+                    ''
+                  }
+                  onChange={(
+                    e,
+                  ) =>
+                    setField(
+                      'brandId',
+
+                      e
+                        .target
+                        .value,
+                    )
+                  }
+                >
+                  <option value="">
+                    Sin marca
+                  </option>
+
+                  {brands
+                    .filter(
+                      (
+                        item,
+                      ) =>
+                        item.active,
+                    )
+                    .map(
+                      (
+                        item,
+                      ) => (
+                        <option
+                          key={
+                            item.id
+                          }
+                          value={
+                            item.id
+                          }
+                        >
+                          {
+                            item.name
+                          }
+                        </option>
+                      ),
+                    )}
+                </select>
+              </label>
+            </div>
+
+            <div className="rounded-3xl bg-black/[0.025] p-4">
+              <p className="mb-4 font-black">
+                Compra y costo
               </p>
 
-              <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid gap-4 sm:grid-cols-3">
                 <label className="text-sm font-bold">
-                  Lo compro por
+                  Presentación
 
                   <select
                     className="field mt-2"
                     value={
                       editing.purchasePresentation
                     }
-                    onChange={(event) =>
-                      changePresentation(
-                        event.target.value
+                    onChange={(
+                      e,
+                    ) =>
+                      setField(
+                        'purchasePresentation',
+
+                        e
+                          .target
+                          .value,
                       )
                     }
                   >
                     <option value="unidad">
-                      Unidad individual
+                      Unidad
                     </option>
 
                     <option value="paquete">
-                      Paquete o caja
+                      Paquete
                     </option>
 
                     <option value="saco">
@@ -872,13 +995,7 @@ export default function ProductsView({
                 </label>
 
                 <label className="text-sm font-bold">
-                  Precio pagado por{' '}
-                  {
-                    presentationNames[
-                      editing
-                        .purchasePresentation
-                    ]
-                  }
+                  Costo presentación
 
                   <input
                     required
@@ -889,57 +1006,50 @@ export default function ProductsView({
                     value={
                       editing.purchasePrice
                     }
-                    onChange={(event) =>
-                      setEditing({
-                        ...editing,
+                    onChange={(
+                      e,
+                    ) =>
+                      setField(
+                        'purchasePrice',
 
-                        purchasePrice:
-                          event.target
-                            .value,
-                      })
+                        e
+                          .target
+                          .value,
+                      )
                     }
                   />
                 </label>
 
                 <label className="text-sm font-bold">
-                  Lo vendo por
+                  Contenido
 
-                  <select
+                  <input
+                    required
+                    min="0.001"
+                    step="0.001"
+                    type="number"
                     className="field mt-2"
                     value={
-                      editing.saleUnit
+                      editing.contentQuantity
                     }
-                    onChange={(event) =>
-                      setEditing({
-                        ...editing,
+                    onChange={(
+                      e,
+                    ) =>
+                      setField(
+                        'contentQuantity',
 
-                        saleUnit:
-                          event.target
-                            .value,
-                      })
+                        e
+                          .target
+                          .value,
+                      )
                     }
-                  >
-                    <option value="unidad">
-                      Unidad
-                    </option>
-
-                    <option value="kg">
-                      Kilogramo
-                    </option>
-                  </select>
+                  />
                 </label>
+              </div>
 
+              <div className="mt-4 grid gap-4 sm:grid-cols-3">
                 <label className="text-sm font-bold">
-                  Cantidad de{' '}
-                  {editing.purchasePresentation ===
-                  'unidad'
-                    ? 'unidades compradas'
-                    : `${
-                        presentationNames[
-                          editing
-                            .purchasePresentation
-                        ]
-                      }s comprados`}
+                  Cantidad de presentaciones
 
                   <input
                     required
@@ -950,385 +1060,346 @@ export default function ProductsView({
                     value={
                       editing.purchaseQuantity
                     }
-                    onChange={(event) =>
-                      setEditing({
-                        ...editing,
+                    onChange={(
+                      e,
+                    ) =>
+                      setField(
+                        'purchaseQuantity',
 
-                        purchaseQuantity:
-                          event.target
-                            .value,
-                      })
-                    }
-                  />
-                </label>
-
-                <label className="text-sm font-bold">
-                  {editing.purchasePresentation ===
-                  'unidad'
-                    ? 'Contenido por unidad'
-                    : `${
-                        editing.saleUnit ===
-                        'kg'
-                          ? 'Kilos'
-                          : 'Unidades'
-                      } por ${
-                        presentationNames[
-                          editing
-                            .purchasePresentation
-                        ]
-                      }`}
-
-                  <input
-                    required
-                    disabled={
-                      editing.purchasePresentation ===
-                      'unidad'
-                    }
-                    min="0.001"
-                    step="0.001"
-                    type="number"
-                    className="field mt-2 disabled:bg-black/[0.03] disabled:text-black/35"
-                    value={
-                      editing.contentQuantity
-                    }
-                    onChange={(event) =>
-                      setEditing({
-                        ...editing,
-
-                        contentQuantity:
-                          event.target
-                            .value,
-                      })
-                    }
-                  />
-                </label>
-
-                {editing.id ? (
-                  <label className="text-sm font-bold">
-                    Stock actual (
-                    {editing.saleUnit ===
-                    'kg'
-                      ? 'kg'
-                      : 'unidades'}
-                    )
-
-                    <input
-                      required
-                      min="0"
-                      step={
-                        editing.saleUnit ===
-                        'kg'
-                          ? '0.001'
-                          : '1'
-                      }
-                      type="number"
-                      className="field mt-2"
-                      value={
-                        editing.stock
-                      }
-                      onChange={(event) =>
-                        setEditing({
-                          ...editing,
-
-                          stock:
-                            event.target
-                              .value,
-                        })
-                      }
-                    />
-                  </label>
-                ) : (
-                  <div className="rounded-2xl bg-mint p-4">
-                    <p className="text-xs font-bold text-forest/65">
-                      Stock inicial
-                      calculado
-                    </p>
-
-                    <p className="mt-1 text-2xl font-black text-forest">
-                      {formatQuantity(
-                        calculatedStock
-                      )}{' '}
-                      {
-                        saleUnitNames[
-                          editing.saleUnit
-                        ]
-                      }
-                    </p>
-
-                    <p className="mt-1 text-xs text-forest/60">
-                      Cantidad comprada ×
-                      contenido
-                    </p>
-                  </div>
-                )}
-
-                <label className="text-sm font-bold">
-                  Stock mínimo (
-                  {editing.saleUnit ===
-                  'kg'
-                    ? 'kg'
-                    : 'unidades'}
-                  )
-
-                  <input
-                    required
-                    min="0"
-                    step={
-                      editing.saleUnit ===
-                      'kg'
-                        ? '0.001'
-                        : '1'
-                    }
-                    type="number"
-                    className="field mt-2"
-                    value={
-                      editing.minStock
-                    }
-                    onChange={(event) =>
-                      setEditing({
-                        ...editing,
-
-                        minStock:
-                          event.target
-                            .value,
-                      })
-                    }
-                  />
-                </label>
-              </div>
-            </section>
-
-            <section className="rounded-3xl border border-amber/30 bg-amber/10 p-5">
-              <h3 className="flex items-center gap-2 font-black text-[#8c5c00]">
-                <CalendarClock
-                  size={19}
-                />
-
-                Lote, registro sanitario
-                y vencimiento
-              </h3>
-
-              <p className="mt-1 text-sm text-black/50">
-                La alerta se activará
-                automáticamente cuando
-                falten dos meses o menos
-                para la fecha de
-                vencimiento.
-              </p>
-
-              <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                <label className="text-sm font-bold">
-                  Fecha de vencimiento
-                  (FV)
-
-                  <input
-                    type="date"
-                    className="field mt-2"
-                    value={
-                      editing.expirationDate
-                    }
-                    onChange={(event) =>
-                      setEditing({
-                        ...editing,
-
-                        expirationDate:
-                          event.target
-                            .value,
-                      })
-                    }
-                  />
-                </label>
-
-                <label className="text-sm font-bold">
-                  Lote
-
-                  <input
-                    className="field mt-2"
-                    placeholder="Ej. L-2026-084"
-                    value={editing.lot}
-                    onChange={(event) =>
-                      setEditing({
-                        ...editing,
-
-                        lot:
-                          event.target
-                            .value,
-                      })
-                    }
-                  />
-                </label>
-
-                <label className="sm:col-span-2 text-sm font-bold">
-                  Registro sanitario
-
-                  <div className="relative mt-2">
-                    <ShieldCheck
-                      className="absolute left-4 top-3.5 text-black/30"
-                      size={18}
-                    />
-
-                    <input
-                      className="field pl-11"
-                      placeholder="Ej. A1234567N"
-                      value={
-                        editing.sanitaryRegistration
-                      }
-                      onChange={(event) =>
-                        setEditing({
-                          ...editing,
-
-                          sanitaryRegistration:
-                            event.target
-                              .value,
-                        })
-                      }
-                    />
-                  </div>
-                </label>
-              </div>
-            </section>
-
-            <section className="rounded-3xl bg-ink p-5 text-white">
-              <h3 className="flex items-center gap-2 font-black">
-                <BadgePercent
-                  size={19}
-                  className="text-amber"
-                />
-
-                Precio de venta y
-                ganancia
-              </h3>
-
-              <p className="mt-1 text-sm text-white/45">
-                Tú defines el precio de
-                venta y el sistema
-                calcula automáticamente
-                el porcentaje real de
-                ganancia.
-              </p>
-
-              <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                <div className="rounded-2xl bg-white/5 p-4">
-                  <p className="text-xs font-bold text-white/45">
-                    Costo real por{' '}
-                    {editing.saleUnit ===
-                    'kg'
-                      ? 'kg'
-                      : 'unidad'}
-                  </p>
-
-                  <p className="mt-1 text-2xl font-black">
-                    {formatMoney(
-                      unitCost
-                    )}
-                  </p>
-
-                  <p className="mt-1 text-xs text-white/40">
-                    Precio de compra ÷
-                    contenido
-                  </p>
-                </div>
-
-                <div
-                  className={`rounded-2xl p-4 ${
-                    profit.percentage < 0
-                      ? 'bg-coral/20 text-white'
-                      : 'bg-mint text-forest'
-                  }`}
-                >
-                  <p className="flex items-center gap-2 text-xs font-black uppercase tracking-wider">
-                    {profit.percentage <
-                    0 ? (
-                      <TrendingDown
-                        size={16}
-                      />
-                    ) : (
-                      <TrendingUp
-                        size={16}
-                      />
-                    )}
-
-                    {profit.percentage < 0
-                      ? 'Pérdida estimada'
-                      : 'Ganancia real'}
-                  </p>
-
-                  <p className="mt-2 text-3xl font-black">
-                    {profit.percentage.toFixed(
-                      2
-                    )}
-                    %
-                  </p>
-
-                  <p className="mt-1 text-xs opacity-65">
-                    {profit.amount >= 0
-                      ? 'Ganas'
-                      : 'Pierdes'}{' '}
-                    {formatMoney(
-                      Math.abs(
-                        profit.amount
+                        e
+                          .target
+                          .value,
                       )
-                    )}{' '}
-                    por{' '}
-                    {editing.saleUnit ===
-                    'kg'
-                      ? 'kg'
-                      : 'unidad'}
+                    }
+                  />
+                </label>
+
+                <div className="rounded-2xl bg-white p-3">
+                  <p className="text-xs font-bold text-black/45">
+                    Costo
+                    unitario
                   </p>
+
+                  <p className="mt-1 text-lg font-black">
+                    {formatMoney(
+                      displayUnitCost,
+                    )}
+                  </p>
+
+                  {editing.id && (
+                    <p className="mt-1 text-xs text-black/40">
+                      Costo
+                      promedio
+                      protegido.
+                    </p>
+                  )}
+                </div>
+
+                <div className="rounded-2xl bg-white p-3">
+                  <p className="text-xs font-bold text-black/45">
+                    {editing.id
+                      ? 'Stock actual'
+                      : 'Stock inicial'}
+                  </p>
+
+                  <p className="mt-1 text-lg font-black">
+                    {formatQuantity(
+                      editing.id
+                        ? editing.stock
+                        : calculatedInitialStock,
+                    )}
+                  </p>
+
+                  {editing.id && (
+                    <p className="mt-1 text-xs text-black/40">
+                      Solo lectura.
+                    </p>
+                  )}
                 </div>
               </div>
+            </div>
 
-              <label className="mt-4 block text-sm font-bold">
-                Precio de venta final
-                por{' '}
-                {editing.saleUnit ===
-                'kg'
-                  ? 'kg'
-                  : 'unidad'}
+            <div className="grid gap-4 sm:grid-cols-3">
+              <label className="text-sm font-bold">
+                Precio de venta
 
                 <input
                   required
                   min="0.01"
                   step="0.01"
                   type="number"
-                  className="field mt-2 text-ink"
+                  className="field mt-2"
                   value={
                     editing.salePrice
                   }
-                  onChange={(event) =>
-                    setEditing({
-                      ...editing,
+                  onChange={(
+                    e,
+                  ) =>
+                    setField(
+                      'salePrice',
 
-                      salePrice:
-                        event.target
-                          .value,
-                    })
+                      e
+                        .target
+                        .value,
+                    )
                   }
                 />
               </label>
 
-              <p className="mt-2 text-xs text-white/40">
-                Cálculo: (precio de venta
-                − costo real) ÷ costo real
-                × 100.
-              </p>
-            </section>
+              <label className="text-sm font-bold">
+                Stock mínimo
 
-            <div className="flex justify-end gap-3">
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={() =>
-                  setEditing(null)
-                }
-              >
-                Cancelar
-              </button>
+                <input
+                  required
+                  min="0"
+                  step="0.001"
+                  type="number"
+                  className="field mt-2"
+                  value={
+                    editing.minStock
+                  }
+                  onChange={(
+                    e,
+                  ) =>
+                    setField(
+                      'minStock',
 
-              <button className="btn-primary">
-                Guardar producto
-              </button>
+                      e
+                        .target
+                        .value,
+                    )
+                  }
+                />
+              </label>
+
+              <label className="text-sm font-bold">
+                Unidad de venta
+
+                <select
+                  className="field mt-2"
+                  value={
+                    editing.saleUnit
+                  }
+                  onChange={(
+                    e,
+                  ) =>
+                    setField(
+                      'saleUnit',
+
+                      e
+                        .target
+                        .value,
+                    )
+                  }
+                >
+                  <option value="unidad">
+                    Unidad
+                  </option>
+
+                  <option value="kg">
+                    Kilogramo
+                  </option>
+
+                  <option value="litro">
+                    Litro
+                  </option>
+                </select>
+              </label>
             </div>
+
+            <div className="grid gap-4 sm:grid-cols-3">
+              <label className="text-sm font-bold">
+                Lote
+
+                <input
+                  className="field mt-2"
+                  value={
+                    editing.lot ||
+                    ''
+                  }
+                  onChange={(
+                    e,
+                  ) =>
+                    setField(
+                      'lot',
+
+                      e
+                        .target
+                        .value,
+                    )
+                  }
+                />
+              </label>
+
+              <label className="text-sm font-bold">
+                Vencimiento
+
+                <input
+                  type="date"
+                  className="field mt-2"
+                  value={
+                    editing.expirationDate ||
+                    ''
+                  }
+                  onChange={(
+                    e,
+                  ) =>
+                    setField(
+                      'expirationDate',
+
+                      e
+                        .target
+                        .value,
+                    )
+                  }
+                />
+              </label>
+
+              <label className="text-sm font-bold">
+                Registro sanitario
+
+                <input
+                  className="field mt-2"
+                  value={
+                    editing.sanitaryRegistration ||
+                    ''
+                  }
+                  onChange={(
+                    e,
+                  ) =>
+                    setField(
+                      'sanitaryRegistration',
+
+                      e
+                        .target
+                        .value,
+                    )
+                  }
+                />
+              </label>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-[1fr_180px]">
+              <label className="text-sm font-bold">
+                Imagen
+
+                <div className="mt-2 flex items-center gap-3">
+                  <label className="btn-secondary cursor-pointer">
+                    <ImagePlus
+                      size={
+                        17
+                      }
+                    />
+
+                    Elegir imagen
+
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={
+                        loadImage
+                      }
+                    />
+                  </label>
+
+                  {editing.image && (
+                    <span className="text-xs font-bold text-forest">
+                      Imagen
+                      cargada
+                    </span>
+                  )}
+                </div>
+              </label>
+
+              <label className="flex items-center gap-3 rounded-2xl bg-mint p-4 text-sm font-bold text-forest">
+                <input
+                  type="checkbox"
+                  checked={
+                    editing.active !==
+                    false
+                  }
+                  onChange={(
+                    e,
+                  ) =>
+                    setField(
+                      'active',
+
+                      e
+                        .target
+                        .checked,
+                    )
+                  }
+                />
+
+                Producto
+                activo
+              </label>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-2xl bg-mint p-4 text-forest">
+                <p className="flex items-center gap-2 text-sm font-bold">
+                  <ShieldCheck
+                    size={
+                      17
+                    }
+                  />
+
+                  Ganancia
+                  estimada
+                </p>
+
+                <p className="mt-1 text-xl font-black">
+                  {formatMoney(
+                    profit.amount,
+                  )}{' '}
+                  ·{' '}
+                  {Number(
+                    profit.percentage ||
+                      0,
+                  ).toFixed(
+                    1,
+                  )}
+                  %
+                </p>
+              </div>
+
+              {editing.id && (
+                <div className="rounded-2xl bg-amber/10 p-4 text-sm text-black/60">
+                  Para cambiar
+                  stock usa{' '}
+                  <strong>
+                    Inventario
+                  </strong>{' '}
+                  o registra
+                  una{' '}
+                  <strong>
+                    Compra
+                  </strong>
+                  .
+                </div>
+              )}
+            </div>
+
+            {error && (
+              <p className="rounded-xl bg-coral/10 p-3 text-sm font-bold text-coral">
+                {error}
+              </p>
+            )}
+
+            <button
+              className="btn-primary w-full"
+              disabled={
+                saving
+              }
+            >
+              {saving
+                ? 'Guardando...'
+                : editing.id
+                ? 'Guardar cambios'
+                : 'Crear producto'}
+            </button>
           </form>
         </Modal>
       )}
