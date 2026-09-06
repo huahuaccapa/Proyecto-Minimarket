@@ -4,19 +4,23 @@ import { randomUUID } from "node:crypto";
 
 import { nextNumber, persistStore, store } from "../../data/store.js";
 
+import { requireRole } from "../../middlewares/auth.js";
+
 import {
   addCashMovement,
   ensureCashAvailable,
   isExpired,
   requireOpenCash,
   roundMoney,
-} from '../../services/business.js';
+} from "../../services/business.js";
 
 import { HttpError, required, response } from "../../utils/http.js";
 
 const router = Router();
 
 const CHILLED_SURCHARGE = 1;
+
+const FRACTIONAL_UNITS = new Set(["kg", "kilogramo", "litro", "l"]);
 
 const normalize = (value = "") =>
   String(value)
@@ -30,182 +34,267 @@ const isBeverage = (product) =>
     store.categories.find((item) => item.id === product.categoryId)?.name,
   ) === "bebidas";
 
-router.get("/", (req, res) => response(res, store.sales));
+const allowsFraction = (product) =>
+  FRACTIONAL_UNITS.has(normalize(product.saleUnit));
 
-router.get("/:id", (req, res) => {
-  const sale = store.sales.find((item) => item.id === req.params.id);
+router.get(
+  "/",
 
-  if (!sale) {
-    throw new HttpError(404, "Venta no encontrada");
-  }
+  (req, res) => response(res, store.sales),
+);
 
-  response(res, sale);
-});
+router.get(
+  "/:id",
 
-router.post("/", (req, res) => {
-  required(req.body, ["items", "paymentMethod"]);
+  (req, res) => {
+    const sale = store.sales.find((item) => item.id === req.params.id);
 
-  if (req.body.paymentMethod !== "Efectivo") {
-    throw new HttpError(
-      400,
-      "Por el momento solo se aceptan pagos en efectivo",
-    );
-  }
+    if (!sale) {
+      throw new HttpError(
+        404,
 
-  requireOpenCash();
-
-  if (!Array.isArray(req.body.items) || !req.body.items.length) {
-    throw new HttpError(400, "La venta debe contener productos");
-  }
-
-  const consolidated = new Map();
-
-  for (const raw of req.body.items) {
-    const quantity = Number(raw.quantity);
-
-    if (!Number.isFinite(quantity) || quantity <= 0) {
-      throw new HttpError(400, "Cantidad de venta inválida");
+        "Venta no encontrada",
+      );
     }
 
-    const current = consolidated.get(raw.productId) || {
-      productId: raw.productId,
+    response(res, sale);
+  },
+);
 
-      quantity: 0,
+router.post(
+  "/",
 
-      isChilled: false,
-    };
+  (req, res) => {
+    required(req.body, ["items", "paymentMethod"]);
 
-    current.quantity += quantity;
-
-    current.isChilled = current.isChilled || raw.isChilled === true;
-
-    consolidated.set(raw.productId, current);
-  }
-
-  const detail = [...consolidated.values()].map((item) => {
-    const product = store.products.find(
-      (candidate) => candidate.id === item.productId && candidate.active,
-    );
-
-    if (!product) {
-      throw new HttpError(404, `Producto no encontrado: ${item.productId}`);
-    }
-
-    if (product.saleUnit === "unidad" && !Number.isInteger(item.quantity)) {
+    if (req.body.paymentMethod !== "Efectivo") {
       throw new HttpError(
         400,
-        `${product.name} solo se vende en unidades completas`,
+
+        "Por el momento solo se aceptan pagos en efectivo",
       );
     }
 
-    if (isExpired(product.expirationDate)) {
-      throw new HttpError(
-        409,
-        `${product.name} está vencido y no puede venderse`,
-      );
-    }
+    requireOpenCash();
 
-    if (Number(product.stock) < item.quantity) {
-      throw new HttpError(409, `Stock insuficiente para ${product.name}`);
-    }
-
-    if (item.isChilled && !isBeverage(product)) {
+    if (!Array.isArray(req.body.items) || !req.body.items.length) {
       throw new HttpError(
         400,
-        "El recargo por bebida helada solo aplica a Bebidas",
+
+        "La venta debe contener productos",
       );
     }
 
-    const surcharge = item.isChilled ? CHILLED_SURCHARGE : 0;
+    const consolidated = new Map();
 
-    const unitPrice = roundMoney(Number(product.salePrice) + surcharge);
+    for (const raw of req.body.items) {
+      const quantity = Number(raw.quantity);
 
-    const unitCost = Number(product.unitCost || 0);
+      if (!Number.isFinite(quantity) || quantity <= 0) {
+        throw new HttpError(
+          400,
 
-    return {
-      productId: product.id,
+          "Cantidad de venta inválida",
+        );
+      }
 
-      barcode: product.barcode,
+      const current = consolidated.get(raw.productId) || {
+        productId: raw.productId,
 
-      name: product.name,
+        quantity: 0,
 
-      saleUnit: product.saleUnit,
+        isChilled: false,
+      };
 
-      quantity: item.quantity,
+      current.quantity += quantity;
 
-      baseUnitPrice: Number(product.salePrice),
+      current.isChilled = current.isChilled || raw.isChilled === true;
 
-      isChilled: item.isChilled,
+      consolidated.set(raw.productId, current);
+    }
 
-      chilledSurcharge: surcharge,
+    const detail = [...consolidated.values()].map((item) => {
+      const product = store.products.find(
+        (candidate) => candidate.id === item.productId && candidate.active,
+      );
 
-      unitPrice,
+      if (!product) {
+        throw new HttpError(
+          404,
 
-      unitCost,
+          `Producto no encontrado: ${item.productId}`,
+        );
+      }
 
-      subtotal: roundMoney(unitPrice * item.quantity),
-    };
-  });
+      if (!allowsFraction(product) && !Number.isInteger(item.quantity)) {
+        throw new HttpError(
+          400,
 
-  const total = roundMoney(
-    detail.reduce((sum, item) => sum + item.subtotal, 0),
-  );
+          `${product.name} solo se vende en cantidades enteras`,
+        );
+      }
 
-  const cost = roundMoney(
-    detail.reduce((sum, item) => sum + item.unitCost * item.quantity, 0),
-  );
+      if (isExpired(product.expirationDate)) {
+        throw new HttpError(
+          409,
 
-  const received = Number(req.body.received);
+          `${product.name} está vencido y no puede venderse`,
+        );
+      }
 
-  if (!Number.isFinite(received) || received < total) {
-    throw new HttpError(400, "El efectivo recibido es menor al total");
-  }
+      if (Number(product.stock) < item.quantity) {
+        throw new HttpError(
+          409,
 
-  const sale = {
-    id: randomUUID(),
+          `Stock insuficiente para ${product.name}`,
+        );
+      }
 
-    number: nextNumber("sale", "V"),
+      if (item.isChilled && !isBeverage(product)) {
+        throw new HttpError(
+          400,
 
-    date: new Date().toISOString(),
+          "El recargo por bebida helada solo aplica a Bebidas",
+        );
+      }
 
-    status: "completed",
+      const surcharge = item.isChilled ? CHILLED_SURCHARGE : 0;
 
-    total,
+      const unitPrice = roundMoney(Number(product.salePrice) + surcharge);
 
-    cost,
+      const unitCost = Number(product.unitCost || 0);
 
-    grossProfit: roundMoney(total - cost),
+      return {
+        productId: product.id,
 
-    paymentMethod: "Efectivo",
+        barcode: product.barcode,
 
-    received: roundMoney(received),
+        name: product.name,
 
-    change: roundMoney(received - total),
+        saleUnit: product.saleUnit,
 
-    items: detail.reduce((sum, item) => sum + item.quantity, 0),
+        quantity: Number(item.quantity.toFixed(3)),
 
-    detail,
+        baseUnitPrice: Number(product.salePrice),
 
-    createdBy: req.user.id,
-  };
+        isChilled: item.isChilled,
 
-  detail.forEach((item) => {
-    const product = store.products.find(
-      (candidate) => candidate.id === item.productId,
+        chilledSurcharge: surcharge,
+
+        unitPrice,
+
+        unitCost,
+
+        subtotal: roundMoney(unitPrice * item.quantity),
+      };
+    });
+
+    const total = roundMoney(
+      detail.reduce(
+        (sum, item) => sum + item.subtotal,
+
+        0,
+      ),
     );
 
-    product.stock = Number((product.stock - item.quantity).toFixed(3));
+    const cost = roundMoney(
+      detail.reduce(
+        (sum, item) => sum + item.unitCost * item.quantity,
 
-    store.inventoryMovements.push({
+        0,
+      ),
+    );
+
+    const received = Number(req.body.received);
+
+    if (!Number.isFinite(received) || received < total) {
+      throw new HttpError(
+        400,
+
+        "El efectivo recibido es menor al total",
+      );
+    }
+
+    const sale = {
       id: randomUUID(),
 
-      productId: product.id,
+      number: nextNumber("sale", "V"),
 
-      productName: product.name,
+      date: new Date().toISOString(),
 
-      type: "salida",
+      status: "completed",
 
-      reasonType: "venta",
+      total,
+
+      cost,
+
+      grossProfit: roundMoney(total - cost),
+
+      paymentMethod: "Efectivo",
+
+      received: roundMoney(received),
+
+      change: roundMoney(received - total),
+
+      items: Number(
+        detail
+          .reduce(
+            (sum, item) => sum + item.quantity,
+
+            0,
+          )
+          .toFixed(3),
+      ),
+
+      detail,
+
+      createdBy: req.user.id,
+    };
+
+    detail.forEach((item) => {
+      const product = store.products.find(
+        (candidate) => candidate.id === item.productId,
+      );
+
+      product.stock = Number(
+        (Number(product.stock) - item.quantity).toFixed(3),
+      );
+
+      store.inventoryMovements.push({
+        id: randomUUID(),
+
+        productId: product.id,
+
+        productName: product.name,
+
+        type: "salida",
+
+        reasonType: "venta",
+
+        reason: `Venta ${sale.number}`,
+
+        referenceType: "sale",
+
+        referenceId: sale.id,
+
+        quantity: item.quantity,
+
+        stockAfter: product.stock,
+
+        date: sale.date,
+
+        createdBy: req.user.id,
+      });
+    });
+
+    store.sales.push(sale);
+
+    addCashMovement({
+      direction: "in",
+
+      type: "sale",
+
+      amount: total,
 
       reason: `Venta ${sale.number}`,
 
@@ -213,90 +302,89 @@ router.post("/", (req, res) => {
 
       referenceId: sale.id,
 
-      quantity: item.quantity,
-
-      stockAfter: product.stock,
-
-      date: sale.date,
-
-      createdBy: req.user.id,
+      userId: req.user.id,
     });
-  });
 
-  store.sales.push(sale);
+    persistStore();
 
-  addCashMovement({
-    direction: "in",
+    response(res, sale, "Venta registrada", 201);
+  },
+);
 
-    type: "sale",
+router.post(
+  "/:id/void",
 
-    amount: total,
+  requireRole("Administrador"),
 
-    reason: `Venta ${sale.number}`,
+  (req, res) => {
+    const sale = store.sales.find((item) => item.id === req.params.id);
 
-    referenceType: "sale",
+    if (!sale) {
+      throw new HttpError(
+        404,
 
-    referenceId: sale.id,
-
-    userId: req.user.id,
-  });
-
-  persistStore();
-
-  response(res, sale, "Venta registrada", 201);
-});
-
-router.post("/:id/void", (req, res) => {
-  const sale = store.sales.find((item) => item.id === req.params.id);
-
-  if (!sale) {
-    throw new HttpError(404, "Venta no encontrada");
-  }
-
-  if (sale.status === "voided") {
-    throw new HttpError(409, "La venta ya está anulada");
-  }
-
-  /*
-   * Primero verificamos que
-   * exista suficiente efectivo
-   * para devolver el dinero.
-   *
-   * Esto evita modificar stock
-   * antes de saber si la
-   * anulación puede completarse.
-   */
-  ensureCashAvailable(sale.total);
-
-  const now = new Date().toISOString();
-
-  /*
-   * Devolver productos
-   * al inventario.
-   */
-  for (const item of sale.detail || []) {
-    const product = store.products.find(
-      (candidate) => candidate.id === item.productId,
-    );
-
-    if (!product) {
-      continue;
+        "Venta no encontrada",
+      );
     }
 
-    product.stock = Number(
-      (Number(product.stock || 0) + Number(item.quantity || 0)).toFixed(3),
-    );
+    if (sale.status === "voided") {
+      throw new HttpError(
+        409,
 
-    store.inventoryMovements.push({
-      id: randomUUID(),
+        "La venta ya está anulada",
+      );
+    }
 
-      productId: product.id,
+    ensureCashAvailable(sale.total);
 
-      productName: product.name,
+    const now = new Date().toISOString();
 
-      type: "entrada",
+    for (const item of sale.detail || []) {
+      const product = store.products.find(
+        (candidate) => candidate.id === item.productId,
+      );
 
-      reasonType: "anulacion_venta",
+      if (!product) {
+        continue;
+      }
+
+      product.stock = Number(
+        (Number(product.stock || 0) + Number(item.quantity || 0)).toFixed(3),
+      );
+
+      store.inventoryMovements.push({
+        id: randomUUID(),
+
+        productId: product.id,
+
+        productName: product.name,
+
+        type: "entrada",
+
+        reasonType: "anulacion_venta",
+
+        reason: `Anulación ${sale.number}`,
+
+        referenceType: "sale",
+
+        referenceId: sale.id,
+
+        quantity: Number(item.quantity),
+
+        stockAfter: product.stock,
+
+        date: now,
+
+        createdBy: req.user.id,
+      });
+    }
+
+    addCashMovement({
+      direction: "out",
+
+      type: "sale_void",
+
+      amount: sale.total,
 
       reason: `Anulación ${sale.number}`,
 
@@ -304,50 +392,27 @@ router.post("/:id/void", (req, res) => {
 
       referenceId: sale.id,
 
-      quantity: Number(item.quantity),
-
-      stockAfter: product.stock,
-
-      date: now,
-
-      createdBy: req.user.id,
+      userId: req.user.id,
     });
-  }
 
-  /*
-   * Registrar devolución
-   * de dinero.
-   */
-  addCashMovement({
-    direction: "out",
+    sale.status = "voided";
 
-    type: "sale_void",
+    sale.voidedAt = now;
 
-    amount: sale.total,
+    sale.voidedBy = req.user.id;
 
-    reason: `Anulación ${sale.number}`,
+    sale.voidReason = String(req.body.reason || "Anulación de venta").trim();
 
-    referenceType: "sale",
+    persistStore();
 
-    referenceId: sale.id,
+    response(
+      res,
 
-    userId: req.user.id,
-  });
+      sale,
 
-  /*
-   * La venta nunca se elimina.
-   */
-  sale.status = "voided";
-
-  sale.voidedAt = now;
-
-  sale.voidedBy = req.user.id;
-
-  sale.voidReason = String(req.body.reason || "Anulación de venta").trim();
-
-  persistStore();
-
-  response(res, sale, "Venta anulada correctamente");
-});
+      "Venta anulada correctamente",
+    );
+  },
+);
 
 export default router;
