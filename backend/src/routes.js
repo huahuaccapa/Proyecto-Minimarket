@@ -24,12 +24,22 @@ import customersRoutes from "./modules/customers/customers.routes.js";
 
 import { authenticate } from "./middlewares/auth.js";
 
+import { pool } from "./config/database.js";
+
 const router = Router();
+
+/*
+ * ==========================================
+ * HEALTH
+ * ==========================================
+ */
 
 router.get(
   "/health",
 
-  (req, res) => {
+  async (req, res) => {
+    await pool.execute("SELECT 1");
+
     res.json({
       success: true,
 
@@ -38,7 +48,9 @@ router.get(
       data: {
         status: "ok",
 
-        storage: "json-file",
+        storage: "mysql",
+
+        database: "connected",
 
         timestamp: new Date().toISOString(),
       },
@@ -46,7 +58,15 @@ router.get(
   },
 );
 
+/*
+ * AUTH NO REQUIERE SESIÓN PREVIA
+ */
+
 router.use("/auth", authRoutes);
+
+/*
+ * TODO LO DE ABAJO REQUIERE LOGIN
+ */
 
 router.use(authenticate);
 
