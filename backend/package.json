@@ -1,12 +1,17 @@
 {
   "name": "minimarket-mama-backend",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
   "type": "module",
+  "description": "API REST del sistema de gestión para minimarket con MySQL",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "node --watch src/server.js",
     "start": "node src/server.js",
-    "test": "node --test"
+    "test": "node --test",
+    "migrate:mysql": "node scripts/migrate-json-to-mysql.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
@@ -14,7 +19,8 @@
     "express": "^5.1.0",
     "helmet": "^8.0.0",
     "morgan": "^1.10.0",
-    "multer": "^2.2.0"
+    "multer": "^2.2.0",
+    "mysql2": "^3.14.4"
   },
   "devDependencies": {
     "supertest": "^7.0.0"
