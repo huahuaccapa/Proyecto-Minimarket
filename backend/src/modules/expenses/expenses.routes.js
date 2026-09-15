@@ -2,7 +2,7 @@ import { Router } from "express";
 
 import { randomUUID } from "node:crypto";
 
-import { persistStore, store } from "../../data/store.js";
+import { pool, withTransaction } from "../../config/database.js";
 
 import { requireRole } from "../../middlewares/auth.js";
 
@@ -16,109 +16,356 @@ import { HttpError, required, response } from "../../utils/http.js";
 
 const router = Router();
 
-router.get("/", requireRole("Administrador"), (req, res) =>
-  response(res, store.expenses),
+function cleanDate(value) {
+  if (!value) {
+    return null;
+  }
+
+  return String(value).slice(0, 10);
+}
+
+function mapExpense(row) {
+  return {
+    id: row.id,
+
+    date: row.date,
+
+    description: row.description,
+
+    category: row.category,
+
+    amount: Number(row.amount || 0),
+
+    paymentMethod: row.paymentMethod,
+
+    status: row.status,
+
+    createdAt: row.createdAt,
+
+    createdBy: row.createdBy,
+
+    voidedAt: row.voidedAt,
+
+    voidedBy: row.voidedBy,
+
+    voidReason: row.voidReason || "",
+  };
+}
+
+/*
+ * ==========================================
+ * LISTAR
+ * ==========================================
+ */
+
+router.get(
+  "/",
+
+  requireRole("Administrador"),
+
+  async (req, res) => {
+    const [rows] = await pool.execute(
+      `
+        SELECT
+          id,
+
+          expense_date
+            AS date,
+
+          description,
+          category,
+          amount,
+
+          payment_method
+            AS paymentMethod,
+
+          status,
+
+          created_at
+            AS createdAt,
+
+          created_by
+            AS createdBy,
+
+          voided_at
+            AS voidedAt,
+
+          voided_by
+            AS voidedBy,
+
+          void_reason
+            AS voidReason
+
+        FROM expenses
+
+        ORDER BY expense_date DESC,
+                 created_at DESC
+        `,
+    );
+
+    response(res, rows.map(mapExpense));
+  },
 );
 
-router.post("/", requireRole("Administrador"), (req, res) => {
-  required(req.body, ["date", "description", "category", "amount"]);
+/*
+ * ==========================================
+ * CREAR
+ * ==========================================
+ */
 
-  const amount = roundMoney(req.body.amount);
+router.post(
+  "/",
 
-  if (!Number.isFinite(amount) || amount <= 0) {
-    throw new HttpError(400, "El monto debe ser mayor que cero");
-  }
+  requireRole("Administrador"),
 
-  const expense = {
-    id: randomUUID(),
+  async (req, res) => {
+    required(req.body, ["date", "description", "category", "amount"]);
 
-    date: req.body.date,
+    const amount = roundMoney(req.body.amount);
 
-    description: String(req.body.description).trim(),
+    if (!Number.isFinite(amount) || amount <= 0) {
+      throw new HttpError(400, "El monto debe ser mayor que cero");
+    }
 
-    category: String(req.body.category).trim(),
+    const description = String(req.body.description).trim();
 
-    amount,
+    const category = String(req.body.category).trim();
 
-    paymentMethod: String(req.body.paymentMethod || "Efectivo"),
+    if (!description || !category) {
+      throw new HttpError(400, "Completa la descripción y categoría");
+    }
 
-    status: "active",
+    const paymentMethod = String(req.body.paymentMethod || "Efectivo");
 
-    createdAt: new Date().toISOString(),
+    if (paymentMethod !== "Efectivo") {
+      throw new HttpError(
+        400,
+        "Por ahora los gastos solo se registran como pagados en efectivo",
+      );
+    }
 
-    createdBy: req.user.id,
-  };
+    const expense = await withTransaction(async (connection) => {
+      /*
+       * Verificar efectivo antes
+       * de registrar gasto.
+       */
+      await ensureCashAvailable(amount, connection);
 
-  if (expense.paymentMethod !== "Efectivo") {
-    throw new HttpError(
-      400,
-      "Por ahora los gastos solo se registran como pagados en efectivo",
-    );
-  }
+      const item = {
+        id: randomUUID(),
 
-  ensureCashAvailable(amount);
+        date: cleanDate(req.body.date),
 
-  store.expenses.unshift(expense);
+        description,
 
-  addCashMovement({
-    direction: "out",
+        category,
 
-    type: "expense",
+        amount,
 
-    amount,
+        paymentMethod: "Efectivo",
 
-    reason: expense.description,
+        status: "active",
 
-    referenceType: "expense",
+        createdAt: new Date(),
 
-    referenceId: expense.id,
+        createdBy: req.user.id,
 
-    userId: req.user.id,
-  });
+        voidedAt: null,
 
-  persistStore();
+        voidedBy: null,
 
-  response(res, expense, "Gasto registrado y descontado de caja", 201);
-});
+        voidReason: "",
+      };
 
-router.post("/:id/void", requireRole("Administrador"), (req, res) => {
-  const expense = store.expenses.find((item) => item.id === req.params.id);
+      await connection.execute(
+        `
+            INSERT INTO expenses
+            (
+              id,
+              expense_date,
+              description,
+              category,
+              amount,
+              payment_method,
+              status,
+              created_at,
+              created_by,
+              voided_at,
+              voided_by,
+              void_reason
+            )
+            VALUES
+            (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `,
 
-  if (!expense) {
-    throw new HttpError(404, "Gasto no encontrado");
-  }
+        [
+          item.id,
+          item.date,
+          item.description,
+          item.category,
+          item.amount,
+          item.paymentMethod,
+          item.status,
+          item.createdAt,
+          item.createdBy,
+          null,
+          null,
+          "",
+        ],
+      );
 
-  if (expense.status === "voided") {
-    throw new HttpError(409, "El gasto ya está anulado");
-  }
+      await addCashMovement(
+        {
+          direction: "out",
 
-  expense.status = "voided";
+          type: "expense",
 
-  expense.voidedAt = new Date().toISOString();
+          amount,
 
-  expense.voidReason = String(req.body.reason || "Anulación de gasto").trim();
+          reason: item.description,
 
-  expense.voidedBy = req.user.id;
+          referenceType: "expense",
 
-  addCashMovement({
-    direction: "in",
+          referenceId: item.id,
 
-    type: "expense_void",
+          userId: req.user.id,
+        },
 
-    amount: expense.amount,
+        connection,
+      );
 
-    reason: `Anulación: ${expense.description}`,
+      return item;
+    });
 
-    referenceType: "expense",
+    response(res, expense, "Gasto registrado y descontado de caja", 201);
+  },
+);
 
-    referenceId: expense.id,
+/*
+ * ==========================================
+ * ANULAR
+ * ==========================================
+ */
 
-    userId: req.user.id,
-  });
+router.post(
+  "/:id/void",
 
-  persistStore();
+  requireRole("Administrador"),
 
-  response(res, expense, "Gasto anulado y efectivo reintegrado");
-});
+  async (req, res) => {
+    const expense = await withTransaction(async (connection) => {
+      const [rows] = await connection.execute(
+        `
+              SELECT
+                id,
+
+                expense_date
+                  AS date,
+
+                description,
+                category,
+                amount,
+
+                payment_method
+                  AS paymentMethod,
+
+                status,
+
+                created_at
+                  AS createdAt,
+
+                created_by
+                  AS createdBy,
+
+                voided_at
+                  AS voidedAt,
+
+                voided_by
+                  AS voidedBy,
+
+                void_reason
+                  AS voidReason
+
+              FROM expenses
+
+              WHERE id = ?
+
+              LIMIT 1
+
+              FOR UPDATE
+              `,
+
+        [req.params.id],
+      );
+
+      if (!rows[0]) {
+        throw new HttpError(404, "Gasto no encontrado");
+      }
+
+      const current = mapExpense(rows[0]);
+
+      if (current.status === "voided") {
+        throw new HttpError(409, "El gasto ya está anulado");
+      }
+
+      const now = new Date();
+
+      const reason = String(req.body.reason || "Anulación de gasto").trim();
+
+      /*
+       * Reintegrar dinero a caja.
+       */
+      await addCashMovement(
+        {
+          direction: "in",
+
+          type: "expense_void",
+
+          amount: current.amount,
+
+          reason: `Anulación: ${current.description}`,
+
+          referenceType: "expense",
+
+          referenceId: current.id,
+
+          userId: req.user.id,
+        },
+
+        connection,
+      );
+
+      await connection.execute(
+        `
+            UPDATE expenses
+
+            SET
+              status = 'voided',
+              voided_at = ?,
+              voided_by = ?,
+              void_reason = ?
+
+            WHERE id = ?
+            `,
+
+        [now, req.user.id, reason, current.id],
+      );
+
+      return {
+        ...current,
+
+        status: "voided",
+
+        voidedAt: now,
+
+        voidedBy: req.user.id,
+
+        voidReason: reason,
+      };
+    });
+
+    response(res, expense, "Gasto anulado y efectivo reintegrado");
+  },
+);
 
 export default router;
