@@ -1,12 +1,12 @@
 import { Router } from "express";
 
-import { store } from "../../data/store.js";
+import { pool } from "../../config/database.js";
 
 import { requireRole } from "../../middlewares/auth.js";
 
-import { customerBalance, roundMoney } from "../../services/business.js";
+import { roundMoney } from "../../services/business.js";
 
-import { response } from "../../utils/http.js";
+import { HttpError, response } from "../../utils/http.js";
 
 const router = Router();
 
@@ -14,9 +14,11 @@ const LIMA_OFFSET_MS = 5 * 60 * 60 * 1000;
 
 const PROMOTION_MIN_AGE_DAYS = 14;
 
-const validSale = (sale) => sale.status !== "voided";
-
-const validExpense = (expense) => expense.status !== "voided";
+/*
+ * ==========================================
+ * FECHAS LIMA
+ * ==========================================
+ */
 
 function limaParts(date = new Date()) {
   const shifted = new Date(date.getTime() - LIMA_OFFSET_MS);
@@ -43,9 +45,19 @@ function limaBoundary(year, month, day, endOfDay = false) {
 }
 
 function parseDateInput(value, endOfDay = false) {
-  return new Date(
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value || ""))) {
+    throw new HttpError(400, "Formato de fecha inválido");
+  }
+
+  const date = new Date(
     `${value}T${endOfDay ? "23:59:59.999" : "00:00:00.000"}-05:00`,
   );
+
+  if (Number.isNaN(date.getTime())) {
+    throw new HttpError(400, "Fecha inválida");
+  }
+
+  return date;
 }
 
 function parsePeriod(query = {}) {
@@ -69,12 +81,17 @@ function parsePeriod(query = {}) {
 
       start = limaBoundary(
         shifted.getUTCFullYear(),
-
         shifted.getUTCMonth(),
-
         shifted.getUTCDate(),
       );
     }
+  }
+
+  if (start > end) {
+    throw new HttpError(
+      400,
+      "La fecha inicial no puede ser posterior a la fecha final",
+    );
   }
 
   return {
@@ -83,11 +100,11 @@ function parsePeriod(query = {}) {
   };
 }
 
-const within = (value, start, end) => {
-  const date = new Date(value);
+function limaDateOnly(date) {
+  const shifted = new Date(date.getTime() - LIMA_OFFSET_MS);
 
-  return date >= start && date <= end;
-};
+  return shifted.toISOString().slice(0, 10);
+}
 
 function ageInDays(value, now = new Date()) {
   const created = new Date(value || 0);
@@ -99,87 +116,261 @@ function ageInDays(value, now = new Date()) {
   return Math.floor((now.getTime() - created.getTime()) / 86400000);
 }
 
-export function buildSummary(query = {}) {
+/*
+ * ==========================================
+ * CONSTRUIR REPORTE
+ * ==========================================
+ */
+
+export async function buildSummary(query = {}) {
   const { start, end } = parsePeriod(query);
 
-  const sales = store.sales.filter(
-    (sale) => validSale(sale) && within(sale.date, start, end),
+  const startDate = limaDateOnly(start);
+
+  const endDate = limaDateOnly(end);
+
+  /*
+   * ======================================
+   * VENTAS EFECTIVO
+   * ======================================
+   */
+
+  const [cashRows] = await pool.execute(
+    `
+      SELECT
+        COUNT(*)
+          AS salesCount,
+
+        COALESCE(
+          SUM(total),
+          0
+        ) AS revenue,
+
+        COALESCE(
+          SUM(cost),
+          0
+        ) AS cost,
+
+        COALESCE(
+          SUM(items),
+          0
+        ) AS units
+
+      FROM sales
+
+      WHERE
+        status <> 'voided'
+        AND date >= ?
+        AND date <= ?
+      `,
+
+    [start, end],
   );
 
-  const creditSales = store.customerCredits.filter(
-    (item) => item.status !== "voided" && within(item.createdAt, start, end),
+  const cashRevenue = roundMoney(cashRows[0]?.revenue || 0);
+
+  const cashCost = roundMoney(cashRows[0]?.cost || 0);
+
+  const cashSalesCount = Number(cashRows[0]?.salesCount || 0);
+
+  const cashUnits = Number(cashRows[0]?.units || 0);
+
+  /*
+   * ======================================
+   * VENTAS A CRÉDITO
+   * ======================================
+   */
+
+  const [creditRows] = await pool.execute(
+    `
+      SELECT
+        COUNT(*)
+          AS salesCount,
+
+        COALESCE(
+          SUM(total),
+          0
+        ) AS revenue,
+
+        COALESCE(
+          SUM(
+            unit_cost *
+            quantity
+          ),
+          0
+        ) AS cost,
+
+        COALESCE(
+          SUM(quantity),
+          0
+        ) AS units
+
+      FROM customer_credits
+
+      WHERE
+        status <> 'voided'
+        AND created_at >= ?
+        AND created_at <= ?
+      `,
+
+    [start, end],
   );
 
-  const expenses = store.expenses.filter(
-    (expense) => validExpense(expense) && within(expense.date, start, end),
+  const creditRevenue = roundMoney(creditRows[0]?.revenue || 0);
+
+  const creditCost = roundMoney(creditRows[0]?.cost || 0);
+
+  const creditSalesCount = Number(creditRows[0]?.salesCount || 0);
+
+  const creditUnits = Number(creditRows[0]?.units || 0);
+
+  /*
+   * ======================================
+   * GASTOS
+   * ======================================
+   */
+
+  const [expenseRows] = await pool.execute(
+    `
+      SELECT
+        COALESCE(
+          SUM(amount),
+          0
+        ) AS total
+
+      FROM expenses
+
+      WHERE
+        status <> 'voided'
+        AND expense_date >= ?
+        AND expense_date <= ?
+      `,
+
+    [startDate, endDate],
   );
 
-  const cashRevenue = roundMoney(
-    sales.reduce(
-      (sum, sale) => sum + Number(sale.total || 0),
+  const expenseTotal = roundMoney(expenseRows[0]?.total || 0);
 
-      0,
-    ),
+  /*
+   * ======================================
+   * PRODUCTOS BASE
+   * ======================================
+   */
+
+  const [productRows] = await pool.execute(
+    `
+      SELECT
+        id,
+        name,
+        stock,
+
+        sale_price
+          AS salePrice,
+
+        unit_cost
+          AS unitCost,
+
+        active,
+
+        created_at
+          AS createdAt
+
+      FROM products
+
+      ORDER BY created_at ASC
+      `,
   );
 
-  const creditRevenue = roundMoney(
-    creditSales.reduce(
-      (sum, item) => sum + Number(item.total || 0),
+  /*
+   * VENTAS EFECTIVO POR PRODUCTO.
+   */
+  const [saleProductRows] = await pool.execute(
+    `
+      SELECT
+        si.product_id
+          AS productId,
 
-      0,
-    ),
+        COALESCE(
+          SUM(si.quantity),
+          0
+        ) AS quantity,
+
+        COALESCE(
+          SUM(si.subtotal),
+          0
+        ) AS revenue,
+
+        COALESCE(
+          SUM(
+            si.unit_cost *
+            si.quantity
+          ),
+          0
+        ) AS cost
+
+      FROM sale_items si
+
+      INNER JOIN sales s
+        ON s.id =
+           si.sale_id
+
+      WHERE
+        s.status <> 'voided'
+        AND s.date >= ?
+        AND s.date <= ?
+
+      GROUP BY
+        si.product_id
+      `,
+
+    [start, end],
   );
 
-  const revenue = roundMoney(cashRevenue + creditRevenue);
+  /*
+   * FIADOS POR PRODUCTO.
+   */
+  const [creditProductRows] = await pool.execute(
+    `
+      SELECT
+        product_id
+          AS productId,
 
-  const cashCost = roundMoney(
-    sales.reduce(
-      (sum, sale) => sum + Number(sale.cost || 0),
+        COALESCE(
+          SUM(quantity),
+          0
+        ) AS quantity,
 
-      0,
-    ),
+        COALESCE(
+          SUM(total),
+          0
+        ) AS revenue,
+
+        COALESCE(
+          SUM(
+            unit_cost *
+            quantity
+          ),
+          0
+        ) AS cost
+
+      FROM customer_credits
+
+      WHERE
+        status <> 'voided'
+        AND created_at >= ?
+        AND created_at <= ?
+
+      GROUP BY
+        product_id
+      `,
+
+    [start, end],
   );
 
-  const creditCost = roundMoney(
-    creditSales.reduce(
-      (sum, item) =>
-        sum + Number(item.unitCost || 0) * Number(item.quantity || 0),
+  const byProduct = new Map();
 
-      0,
-    ),
-  );
-
-  const cost = roundMoney(cashCost + creditCost);
-
-  const expenseTotal = roundMoney(
-    expenses.reduce(
-      (sum, item) => sum + Number(item.amount || 0),
-
-      0,
-    ),
-  );
-
-  const grossProfit = roundMoney(revenue - cost);
-
-  const netProfit = roundMoney(grossProfit - expenseTotal);
-
-  const unitsSold = Number(
-    (
-      sales.reduce(
-        (sum, sale) => sum + Number(sale.items || 0),
-
-        0,
-      ) +
-      creditSales.reduce(
-        (sum, item) => sum + Number(item.quantity || 0),
-
-        0,
-      )
-    ).toFixed(3),
-  );
-
-  const byProduct = new Map(
-    store.products.map((product) => [
+  for (const product of productRows) {
+    byProduct.set(
       product.id,
 
       {
@@ -187,11 +378,15 @@ export function buildSummary(query = {}) {
 
         name: product.name,
 
-        stock: product.stock,
+        stock: Number(product.stock || 0),
 
-        salePrice: product.salePrice,
+        salePrice: Number(product.salePrice || 0),
 
-        unitCost: product.unitCost,
+        unitCost: Number(product.unitCost || 0),
+
+        active: Boolean(product.active),
+
+        createdAt: product.createdAt,
 
         quantity: 0,
 
@@ -199,38 +394,42 @@ export function buildSummary(query = {}) {
 
         cost: 0,
       },
-    ]),
-  );
+    );
+  }
 
-  sales.forEach((sale) =>
-    (sale.detail || []).forEach((line) => {
-      const row = byProduct.get(line.productId);
+  /*
+   * SUMAR VENTAS EFECTIVO.
+   */
+  for (const row of saleProductRows) {
+    const product = byProduct.get(row.productId);
 
-      if (!row) {
-        return;
-      }
-
-      row.quantity += Number(line.quantity || 0);
-
-      row.revenue += Number(line.subtotal || 0);
-
-      row.cost += Number(line.unitCost || 0) * Number(line.quantity || 0);
-    }),
-  );
-
-  creditSales.forEach((line) => {
-    const row = byProduct.get(line.productId);
-
-    if (!row) {
-      return;
+    if (!product) {
+      continue;
     }
 
-    row.quantity += Number(line.quantity || 0);
+    product.quantity += Number(row.quantity || 0);
 
-    row.revenue += Number(line.total || 0);
+    product.revenue += Number(row.revenue || 0);
 
-    row.cost += Number(line.unitCost || 0) * Number(line.quantity || 0);
-  });
+    product.cost += Number(row.cost || 0);
+  }
+
+  /*
+   * SUMAR FIADOS.
+   */
+  for (const row of creditProductRows) {
+    const product = byProduct.get(row.productId);
+
+    if (!product) {
+      continue;
+    }
+
+    product.quantity += Number(row.quantity || 0);
+
+    product.revenue += Number(row.revenue || 0);
+
+    product.cost += Number(row.cost || 0);
+  }
 
   const products = [...byProduct.values()].map((row) => ({
     ...row,
@@ -243,6 +442,12 @@ export function buildSummary(query = {}) {
 
     profit: roundMoney(row.revenue - row.cost),
   }));
+
+  /*
+   * ======================================
+   * TOP PRODUCTOS
+   * ======================================
+   */
 
   const sold = products
     .filter((item) => item.quantity > 0)
@@ -258,49 +463,52 @@ export function buildSummary(query = {}) {
 
   const topProducts = sold.slice(0, 10);
 
-  const slowProducts = sold
-    .filter(
-      (item) =>
-        item.quantity <=
-        Math.max(
-          1,
+  /*
+   * ======================================
+   * BAJA ROTACIÓN
+   * ======================================
+   */
 
-          average * 0.4,
-        ),
-    )
+  const slowProducts = sold
+    .filter((item) => item.quantity <= Math.max(1, average * 0.4))
     .slice(0, 10);
+
+  /*
+   * ======================================
+   * SIN VENTAS
+   * ======================================
+   */
 
   const noSalesProducts = products
-    .filter(
-      (item) =>
-        item.quantity === 0 &&
-        store.products.find((p) => p.id === item.productId)?.active,
-    )
+    .filter((item) => item.active && item.quantity === 0)
     .slice(0, 10);
 
-  const promotions = [...noSalesProducts, ...slowProducts]
+  /*
+   * ======================================
+   * PROMOCIONES SUGERIDAS
+   * ======================================
+   */
+
+  const promotionCandidates = [...noSalesProducts, ...slowProducts];
+
+  const promotions = promotionCandidates
     .filter(
       (item, index, list) =>
         list.findIndex(
           (candidate) => candidate.productId === item.productId,
         ) === index,
     )
-    .filter((item) => {
-      const product = store.products.find((p) => p.id === item.productId);
-
-      return (
-        product?.active &&
-        Number(product.stock || 0) > 0 &&
-        ageInDays(product.createdAt) >= PROMOTION_MIN_AGE_DAYS
-      );
-    })
+    .filter(
+      (item) =>
+        item.active &&
+        Number(item.stock || 0) > 0 &&
+        ageInDays(item.createdAt) >= PROMOTION_MIN_AGE_DAYS,
+    )
     .slice(0, 8)
     .map((item) => {
-      const product = store.products.find((p) => p.id === item.productId);
+      const salePrice = Number(item.salePrice || 0);
 
-      const salePrice = Number(product.salePrice || 0);
-
-      const unitCost = Number(product.unitCost || 0);
+      const unitCost = Number(item.unitCost || 0);
 
       const margin = salePrice - unitCost;
 
@@ -331,19 +539,140 @@ export function buildSummary(query = {}) {
       };
     });
 
-  const receivables = roundMoney(
-    store.customers
-      .filter((customer) => customer.active)
-      .reduce(
-        (sum, customer) => sum + customerBalance(customer.id).balance,
+  /*
+   * ======================================
+   * CUENTAS POR COBRAR
+   * ======================================
+   */
 
-        0,
-      ),
+  const [customerRows] = await pool.execute(
+    `
+      SELECT
+        c.id,
+
+        COALESCE(
+          cc.charges,
+          0
+        ) AS charges,
+
+        COALESCE(
+          cp.payments,
+          0
+        ) AS payments
+
+      FROM customers c
+
+      LEFT JOIN
+      (
+        SELECT
+          customer_id,
+
+          SUM(total)
+            AS charges
+
+        FROM customer_credits
+
+        WHERE status <> 'voided'
+
+        GROUP BY customer_id
+      ) cc
+        ON cc.customer_id =
+           c.id
+
+      LEFT JOIN
+      (
+        SELECT
+          customer_id,
+
+          SUM(amount)
+            AS payments
+
+        FROM customer_payments
+
+        WHERE status <> 'voided'
+
+        GROUP BY customer_id
+      ) cp
+        ON cp.customer_id =
+           c.id
+
+      WHERE c.active = 1
+      `,
   );
 
-  const debtorsCount = store.customers.filter(
-    (customer) => customer.active && customerBalance(customer.id).balance > 0,
+  let receivables = 0;
+
+  let debtorsCount = 0;
+
+  for (const row of customerRows) {
+    const balance = roundMoney(
+      Math.max(
+        0,
+
+        Number(row.charges || 0) - Number(row.payments || 0),
+      ),
+    );
+
+    if (balance > 0) {
+      debtorsCount += 1;
+
+      receivables += balance;
+    }
+  }
+
+  receivables = roundMoney(receivables);
+
+  /*
+   * ======================================
+   * STOCK BAJO
+   * ======================================
+   */
+
+  const lowStockCount = products.filter(
+    (product) =>
+      product.active &&
+      Number(product.stock) <=
+        Number(
+          productRows.find((candidate) => candidate.id === product.productId)
+            ?.minStock || 0,
+        ),
   ).length;
+
+  /*
+   * La consulta anterior no seleccionó
+   * min_stock para mantener el objeto limpio.
+   * Calculamos el número directamente.
+   */
+  const [lowRows] = await pool.execute(
+    `
+      SELECT COUNT(*)
+        AS total
+
+      FROM products
+
+      WHERE
+        active = 1
+        AND stock <= min_stock
+      `,
+  );
+
+  const finalLowStockCount = Number(lowRows[0]?.total || lowStockCount || 0);
+
+  /*
+   * ======================================
+   * TOTALES
+   * ======================================
+   */
+
+  const revenue = roundMoney(cashRevenue + creditRevenue);
+
+  const cost = roundMoney(cashCost + creditCost);
+
+  const grossProfit = roundMoney(revenue - cost);
+
+  const netProfit = roundMoney(grossProfit - expenseTotal);
+
+  const unitsSold = Number((cashUnits + creditUnits).toFixed(3));
 
   return {
     period: {
@@ -370,17 +699,15 @@ export function buildSummary(query = {}) {
 
     margin: revenue ? Number(((netProfit / revenue) * 100).toFixed(1)) : 0,
 
-    salesCount: sales.length + creditSales.length,
+    salesCount: cashSalesCount + creditSalesCount,
 
-    cashSalesCount: sales.length,
+    cashSalesCount,
 
-    creditSalesCount: creditSales.length,
+    creditSalesCount,
 
     unitsSold,
 
-    lowStockCount: store.products.filter(
-      (p) => p.active && Number(p.stock) <= Number(p.minStock),
-    ).length,
+    lowStockCount: finalLowStockCount,
 
     receivables,
 
@@ -396,30 +723,42 @@ export function buildSummary(query = {}) {
   };
 }
 
+/*
+ * ==========================================
+ * REPORTE COMPLETO
+ * ==========================================
+ */
+
 router.get(
   "/summary",
 
   requireRole("Administrador"),
 
-  (req, res) =>
+  async (req, res) => {
     response(
       res,
 
-      buildSummary(req.query),
-    ),
+      await buildSummary(req.query),
+    );
+  },
 );
+
+/*
+ * ==========================================
+ * TOP PRODUCTOS
+ * ==========================================
+ */
 
 router.get(
   "/top-products",
 
   requireRole("Administrador"),
 
-  (req, res) =>
-    response(
-      res,
+  async (req, res) => {
+    const summary = await buildSummary(req.query);
 
-      buildSummary(req.query).topProducts,
-    ),
+    response(res, summary.topProducts);
+  },
 );
 
 export default router;
