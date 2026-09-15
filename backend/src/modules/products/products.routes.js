@@ -2,7 +2,7 @@ import { Router } from "express";
 
 import { randomUUID } from "node:crypto";
 
-import { persistStore, store } from "../../data/store.js";
+import { pool, withTransaction } from "../../config/database.js";
 
 import { requireRole } from "../../middlewares/auth.js";
 
@@ -12,13 +12,166 @@ const router = Router();
 
 const money4 = (value) => Number(Number(value).toFixed(4));
 
-const categoryExists = (id) =>
-  store.categories.some((item) => item.id === id && item.active);
+const cleanDate = (value) => {
+  if (!value) {
+    return null;
+  }
 
-const brandExists = (id) =>
-  !id || store.brands.some((item) => item.id === id && item.active);
+  if (value instanceof Date) {
+    return value.toISOString().slice(0, 10);
+  }
 
-function validateCommon(body, current = {}) {
+  return String(value).slice(0, 10);
+};
+
+function mapProduct(row) {
+  return {
+    id: row.id,
+
+    barcode: row.barcode,
+
+    name: row.name,
+
+    description: row.description || "",
+
+    categoryId: row.categoryId,
+
+    brandId: row.brandId || "",
+
+    purchasePresentation: row.purchasePresentation,
+
+    purchasePrice: Number(row.purchasePrice || 0),
+
+    contentQuantity: Number(row.contentQuantity || 0),
+
+    purchaseQuantity: Number(row.purchaseQuantity || 0),
+
+    unitCost: Number(row.unitCost || 0),
+
+    salePrice: Number(row.salePrice || 0),
+
+    stock: Number(row.stock || 0),
+
+    minStock: Number(row.minStock || 0),
+
+    saleUnit: row.saleUnit || "unidad",
+
+    unit: row.saleUnit || "unidad",
+
+    image: row.image || "",
+
+    expirationDate: cleanDate(row.expirationDate) || "",
+
+    sanitaryRegistration: row.sanitaryRegistration || "",
+
+    lot: row.lot || "",
+
+    active: Boolean(row.active),
+
+    createdAt: row.createdAt,
+
+    updatedAt: row.updatedAt || null,
+  };
+}
+
+const PRODUCT_SELECT = `
+SELECT
+  id,
+  barcode,
+  name,
+  description,
+
+  category_id
+    AS categoryId,
+
+  brand_id
+    AS brandId,
+
+  purchase_presentation
+    AS purchasePresentation,
+
+  purchase_price
+    AS purchasePrice,
+
+  content_quantity
+    AS contentQuantity,
+
+  purchase_quantity
+    AS purchaseQuantity,
+
+  unit_cost
+    AS unitCost,
+
+  sale_price
+    AS salePrice,
+
+  stock,
+
+  min_stock
+    AS minStock,
+
+  sale_unit
+    AS saleUnit,
+
+  image,
+
+  expiration_date
+    AS expirationDate,
+
+  sanitary_registration
+    AS sanitaryRegistration,
+
+  lot,
+  active,
+
+  created_at
+    AS createdAt,
+
+  updated_at
+    AS updatedAt
+
+FROM products
+`;
+
+async function categoryExists(id, db = pool) {
+  const [rows] = await db.execute(
+    `
+      SELECT id
+      FROM categories
+      WHERE
+        id = ?
+        AND active = 1
+      LIMIT 1
+      `,
+
+    [id],
+  );
+
+  return Boolean(rows.length);
+}
+
+async function brandExists(id, db = pool) {
+  if (!id) {
+    return true;
+  }
+
+  const [rows] = await db.execute(
+    `
+      SELECT id
+      FROM brands
+      WHERE
+        id = ?
+        AND active = 1
+      LIMIT 1
+      `,
+
+    [id],
+  );
+
+  return Boolean(rows.length);
+}
+
+async function validateCommon(body, current = {}, db = pool) {
   const purchasePrice = Number(
     body.purchasePrice ?? current.purchasePrice ?? 0,
   );
@@ -55,27 +208,15 @@ function validateCommon(body, current = {}) {
     salePrice <= 0 ||
     minStock < 0
   ) {
-    throw new HttpError(
-      400,
-
-      "Revisa los precios y cantidades ingresados",
-    );
+    throw new HttpError(400, "Revisa los precios y cantidades ingresados");
   }
 
-  if (!categoryExists(categoryId)) {
-    throw new HttpError(
-      400,
-
-      "Selecciona una categoría válida",
-    );
+  if (!(await categoryExists(categoryId, db))) {
+    throw new HttpError(400, "Selecciona una categoría válida");
   }
 
-  if (!brandExists(brandId)) {
-    throw new HttpError(
-      400,
-
-      "Selecciona una marca válida",
-    );
+  if (!(await brandExists(brandId, db))) {
+    throw new HttpError(400, "Selecciona una marca válida");
   }
 
   return {
@@ -85,175 +226,120 @@ function validateCommon(body, current = {}) {
     salePrice,
     minStock,
     categoryId,
-    brandId,
+    brandId: brandId || null,
   };
 }
 
-function buildNewProduct(body) {
-  const data = validateCommon(body);
-
-  const stock = data.purchaseQuantity * data.contentQuantity;
-
-  const unitCost = data.purchasePrice / data.contentQuantity;
-
-  return {
-    barcode: String(body.barcode || "").trim(),
-
-    name: String(body.name || "").trim(),
-
-    description: String(body.description || "").trim(),
-
-    categoryId: data.categoryId,
-
-    brandId: data.brandId,
-
-    purchasePresentation: body.purchasePresentation || "unidad",
-
-    purchasePrice: money4(data.purchasePrice),
-
-    contentQuantity: data.contentQuantity,
-
-    purchaseQuantity: data.purchaseQuantity,
-
-    unitCost: money4(unitCost),
-
-    salePrice: Number(data.salePrice.toFixed(2)),
-
-    stock: Number(stock.toFixed(3)),
-
-    minStock: data.minStock,
-
-    saleUnit: body.saleUnit || body.unit || "unidad",
-
-    unit: body.unit || body.saleUnit || "unidad",
-
-    image: String(body.image || ""),
-
-    expirationDate: String(body.expirationDate || ""),
-
-    sanitaryRegistration: String(body.sanitaryRegistration || "").trim(),
-
-    lot: String(body.lot || "").trim(),
-
-    active: body.active ?? true,
-  };
-}
-
-function buildUpdatedProduct(body, current) {
-  const data = validateCommon(body, current);
-
-  return {
-    ...current,
-
-    barcode: String(body.barcode ?? current.barcode ?? "").trim(),
-
-    name: String(body.name ?? current.name ?? "").trim(),
-
-    description: String(body.description ?? current.description ?? "").trim(),
-
-    categoryId: data.categoryId,
-
-    brandId: data.brandId,
-
-    purchasePresentation:
-      body.purchasePresentation ?? current.purchasePresentation ?? "unidad",
-
-    purchasePrice: money4(data.purchasePrice),
-
-    contentQuantity: data.contentQuantity,
-
-    purchaseQuantity: data.purchaseQuantity,
-
-    // Protegido.
-    unitCost: Number(current.unitCost || 0),
-
-    // Protegido.
-    stock: Number(current.stock || 0),
-
-    salePrice: Number(data.salePrice.toFixed(2)),
-
-    minStock: data.minStock,
-
-    saleUnit: body.saleUnit ?? body.unit ?? current.saleUnit ?? "unidad",
-
-    unit: body.unit ?? body.saleUnit ?? current.unit ?? "unidad",
-
-    image: String(body.image ?? current.image ?? ""),
-
-    expirationDate: String(body.expirationDate ?? current.expirationDate ?? ""),
-
-    sanitaryRegistration: String(
-      body.sanitaryRegistration ?? current.sanitaryRegistration ?? "",
-    ).trim(),
-
-    lot: String(body.lot ?? current.lot ?? "").trim(),
-
-    active: body.active ?? current.active ?? true,
-  };
-}
+/*
+ * ==========================================
+ * LISTAR
+ * ==========================================
+ */
 
 router.get(
   "/",
 
-  (req, res) => {
-    const search = String(req.query.search || "").toLowerCase();
+  async (req, res) => {
+    const search = `%${String(req.query.search || "")
+      .trim()
+      .toLowerCase()}%`;
 
-    response(
-      res,
+    const [rows] = await pool.execute(
+      `
+        ${PRODUCT_SELECT}
 
-      store.products.filter((item) =>
-        `${item.name} ${item.barcode} ${item.lot || ""}`
-          .toLowerCase()
-          .includes(search),
-      ),
+        WHERE
+          LOWER(name) LIKE ?
+          OR LOWER(barcode) LIKE ?
+          OR LOWER(
+            COALESCE(
+              lot,
+              ''
+            )
+          ) LIKE ?
+
+        ORDER BY created_at DESC
+        `,
+
+      [search, search, search],
     );
+
+    response(res, rows.map(mapProduct));
   },
 );
+
+/*
+ * ==========================================
+ * POR BARCODE
+ * ==========================================
+ */
 
 router.get(
   "/barcode/:barcode",
 
-  (req, res) => {
-    const product = store.products.find(
-      (item) => item.barcode === req.params.barcode,
+  async (req, res) => {
+    const [rows] = await pool.execute(
+      `
+        ${PRODUCT_SELECT}
+
+        WHERE barcode = ?
+
+        LIMIT 1
+        `,
+
+      [req.params.barcode],
     );
 
-    if (!product) {
-      throw new HttpError(
-        404,
-
-        "Producto no encontrado",
-      );
+    if (!rows[0]) {
+      throw new HttpError(404, "Producto no encontrado");
     }
 
-    response(res, product);
+    response(res, mapProduct(rows[0]));
   },
 );
+
+/*
+ * ==========================================
+ * POR ID
+ * ==========================================
+ */
 
 router.get(
   "/:id",
 
-  (req, res) => {
-    const product = store.products.find((item) => item.id === req.params.id);
+  async (req, res) => {
+    const [rows] = await pool.execute(
+      `
+        ${PRODUCT_SELECT}
 
-    if (!product) {
-      throw new HttpError(
-        404,
+        WHERE id = ?
 
-        "Producto no encontrado",
-      );
+        LIMIT 1
+        `,
+
+      [req.params.id],
+    );
+
+    if (!rows[0]) {
+      throw new HttpError(404, "Producto no encontrado");
     }
 
-    response(res, product);
+    response(res, mapProduct(rows[0]));
   },
 );
+
+/*
+ * ==========================================
+ * CREAR
+ * ==========================================
+ */
 
 router.post(
   "/",
 
   requireRole("Administrador"),
 
-  (req, res) => {
+  async (req, res) => {
     required(req.body, [
       "barcode",
       "name",
@@ -264,112 +350,358 @@ router.post(
 
     const barcode = String(req.body.barcode).trim();
 
+    const name = String(req.body.name).trim();
+
     if (!barcode) {
-      throw new HttpError(
-        400,
-
-        "Ingresa un código de barras",
-      );
+      throw new HttpError(400, "Ingresa un código de barras");
     }
 
-    if (store.products.some((item) => item.barcode === barcode)) {
-      throw new HttpError(
-        409,
-
-        "El código de barras ya está registrado",
-      );
+    if (!name) {
+      throw new HttpError(400, "Ingresa el nombre del producto");
     }
+
+    const [duplicate] = await pool.execute(
+      `
+        SELECT id
+
+        FROM products
+
+        WHERE barcode = ?
+
+        LIMIT 1
+        `,
+
+      [barcode],
+    );
+
+    if (duplicate.length) {
+      throw new HttpError(409, "El código de barras ya está registrado");
+    }
+
+    const data = await validateCommon(req.body);
+
+    const stock = Number(
+      (data.purchaseQuantity * data.contentQuantity).toFixed(3),
+    );
+
+    const unitCost = money4(data.purchasePrice / data.contentQuantity);
 
     const product = {
       id: randomUUID(),
 
-      ...buildNewProduct({
-        ...req.body,
-        barcode,
-      }),
+      barcode,
 
-      createdAt: new Date().toISOString(),
+      name,
+
+      description: String(req.body.description || "").trim(),
+
+      categoryId: data.categoryId,
+
+      brandId: data.brandId,
+
+      purchasePresentation: req.body.purchasePresentation || "unidad",
+
+      purchasePrice: money4(data.purchasePrice),
+
+      contentQuantity: data.contentQuantity,
+
+      purchaseQuantity: data.purchaseQuantity,
+
+      unitCost,
+
+      salePrice: Number(data.salePrice.toFixed(2)),
+
+      stock,
+
+      minStock: data.minStock,
+
+      saleUnit: req.body.saleUnit || req.body.unit || "unidad",
+
+      image: String(req.body.image || ""),
+
+      expirationDate: cleanDate(req.body.expirationDate),
+
+      sanitaryRegistration: String(req.body.sanitaryRegistration || "").trim(),
+
+      lot: String(req.body.lot || "").trim(),
+
+      active: req.body.active ?? true,
+
+      createdAt: new Date(),
     };
 
-    store.products.unshift(product);
+    await withTransaction(async (connection) => {
+      await connection.execute(
+        `
+          INSERT INTO products
+          (
+            id,
+            barcode,
+            name,
+            description,
+            category_id,
+            brand_id,
+            purchase_presentation,
+            purchase_price,
+            content_quantity,
+            purchase_quantity,
+            unit_cost,
+            sale_price,
+            stock,
+            min_stock,
+            sale_unit,
+            image,
+            expiration_date,
+            sanitary_registration,
+            lot,
+            active,
+            created_at,
+            updated_at
+          )
+          VALUES
+          (
+            ?, ?, ?, ?, ?, ?,
+            ?, ?, ?, ?, ?, ?,
+            ?, ?, ?, ?, ?, ?,
+            ?, ?, ?, ?
+          )
+          `,
 
-    if (product.stock > 0) {
-      store.inventoryMovements.push({
-        id: randomUUID(),
+        [
+          product.id,
+          product.barcode,
+          product.name,
+          product.description,
+          product.categoryId,
+          product.brandId,
+          product.purchasePresentation,
+          product.purchasePrice,
+          product.contentQuantity,
+          product.purchaseQuantity,
+          product.unitCost,
+          product.salePrice,
+          product.stock,
+          product.minStock,
+          product.saleUnit,
+          product.image || null,
+          product.expirationDate,
+          product.sanitaryRegistration,
+          product.lot,
+          product.active,
+          product.createdAt,
+          product.createdAt,
+        ],
+      );
 
-        productId: product.id,
+      /*
+       * Movimiento inicial.
+       */
+      if (product.stock > 0) {
+        await connection.execute(
+          `
+            INSERT INTO inventory_movements
+            (
+              id,
+              product_id,
+              product_name,
+              movement_type,
+              reason_type,
+              reason,
+              reference_type,
+              reference_id,
+              quantity,
+              stock_after,
+              movement_date,
+              created_by
+            )
+            VALUES
+            (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `,
 
-        productName: product.name,
-
-        type: "entrada",
-
-        reasonType: "inventario_inicial",
-
-        reason: "Inventario inicial",
-
-        quantity: product.stock,
-
-        stockAfter: product.stock,
-
-        date: new Date().toISOString(),
-
-        createdBy: req.user.id,
-      });
-    }
-
-    persistStore();
+          [
+            randomUUID(),
+            product.id,
+            product.name,
+            "entrada",
+            "inventario_inicial",
+            "Inventario inicial",
+            "",
+            "",
+            product.stock,
+            product.stock,
+            product.createdAt,
+            req.user.id,
+          ],
+        );
+      }
+    });
 
     response(res, product, "Producto creado", 201);
   },
 );
+
+/*
+ * ==========================================
+ * ACTUALIZAR
+ * ==========================================
+ */
 
 router.put(
   "/:id",
 
   requireRole("Administrador"),
 
-  (req, res) => {
-    const index = store.products.findIndex((item) => item.id === req.params.id);
+  async (req, res) => {
+    const [rows] = await pool.execute(
+      `
+        ${PRODUCT_SELECT}
 
-    if (index === -1) {
-      throw new HttpError(
-        404,
+        WHERE id = ?
 
-        "Producto no encontrado",
-      );
+        LIMIT 1
+        `,
+
+      [req.params.id],
+    );
+
+    if (!rows[0]) {
+      throw new HttpError(404, "Producto no encontrado");
     }
 
-    const current = store.products[index];
+    const current = mapProduct(rows[0]);
 
     const barcode = String(req.body.barcode ?? current.barcode).trim();
 
-    if (
-      store.products.some(
-        (item, position) => position !== index && item.barcode === barcode,
-      )
-    ) {
-      throw new HttpError(
-        409,
+    const [duplicated] = await pool.execute(
+      `
+        SELECT id
 
-        "El código de barras ya está registrado",
-      );
+        FROM products
+
+        WHERE
+          barcode = ?
+          AND id <> ?
+
+        LIMIT 1
+        `,
+
+      [barcode, current.id],
+    );
+
+    if (duplicated.length) {
+      throw new HttpError(409, "El código de barras ya está registrado");
     }
 
+    const data = await validateCommon(req.body, current);
+
+    /*
+     * MUY IMPORTANTE:
+     *
+     * stock y unitCost NO se toman del frontend.
+     */
     const updated = {
-      ...buildUpdatedProduct(
-        {
-          ...req.body,
-          barcode,
-        },
-        current,
+      ...current,
+
+      barcode,
+
+      name: String(req.body.name ?? current.name).trim(),
+
+      description: String(
+        req.body.description ?? current.description ?? "",
+      ).trim(),
+
+      categoryId: data.categoryId,
+
+      brandId: data.brandId,
+
+      purchasePresentation:
+        req.body.purchasePresentation ??
+        current.purchasePresentation ??
+        "unidad",
+
+      purchasePrice: money4(data.purchasePrice),
+
+      contentQuantity: data.contentQuantity,
+
+      purchaseQuantity: data.purchaseQuantity,
+
+      unitCost: Number(current.unitCost || 0),
+
+      stock: Number(current.stock || 0),
+
+      salePrice: Number(data.salePrice.toFixed(2)),
+
+      minStock: data.minStock,
+
+      saleUnit:
+        req.body.saleUnit ?? req.body.unit ?? current.saleUnit ?? "unidad",
+
+      image: String(req.body.image ?? current.image ?? ""),
+
+      expirationDate: cleanDate(
+        req.body.expirationDate ?? current.expirationDate,
       ),
 
-      updatedAt: new Date().toISOString(),
+      sanitaryRegistration: String(
+        req.body.sanitaryRegistration ?? current.sanitaryRegistration ?? "",
+      ).trim(),
+
+      lot: String(req.body.lot ?? current.lot ?? "").trim(),
+
+      active: req.body.active ?? current.active,
+
+      updatedAt: new Date(),
     };
 
-    store.products[index] = updated;
+    await pool.execute(
+      `
+      UPDATE products
 
-    persistStore();
+      SET
+        barcode = ?,
+        name = ?,
+        description = ?,
+        category_id = ?,
+        brand_id = ?,
+        purchase_presentation = ?,
+        purchase_price = ?,
+        content_quantity = ?,
+        purchase_quantity = ?,
+        sale_price = ?,
+        min_stock = ?,
+        sale_unit = ?,
+        image = ?,
+        expiration_date = ?,
+        sanitary_registration = ?,
+        lot = ?,
+        active = ?,
+        updated_at = ?
+
+      WHERE id = ?
+      `,
+
+      [
+        updated.barcode,
+        updated.name,
+        updated.description,
+        updated.categoryId,
+        updated.brandId,
+        updated.purchasePresentation,
+        updated.purchasePrice,
+        updated.contentQuantity,
+        updated.purchaseQuantity,
+        updated.salePrice,
+        updated.minStock,
+        updated.saleUnit,
+        updated.image || null,
+        updated.expirationDate,
+        updated.sanitaryRegistration,
+        updated.lot,
+        updated.active,
+        updated.updatedAt,
+        updated.id,
+      ],
+    );
 
     response(res, updated, "Producto actualizado");
   },
