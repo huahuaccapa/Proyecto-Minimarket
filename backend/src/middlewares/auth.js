@@ -1,340 +1,114 @@
-import {
-  randomBytes,
-} from "node:crypto";
+import { HttpError } from "../utils/http.js";
 
 import {
-  persistStore,
-  store,
-} from "../data/store.js";
-
-import {
-  HttpError,
-} from "../utils/http.js";
+  cleanupExpiredSessions,
+  findSessionWithUser,
+  revokeSession,
+} from "../services/sessions.service.js";
 
 /*
  * ==========================================
- * CONFIGURACIÓN DE SESIÓN
+ * OBTENER TOKEN
  * ==========================================
- *
- * 12 horas.
  */
-const SESSION_MS =
-  12 *
-  60 *
-  60 *
-  1000;
 
-/*
- * Cada cuánto se realiza una
- * limpieza general de sesiones
- * expiradas.
- */
-const CLEANUP_INTERVAL_MS =
-  15 *
-  60 *
-  1000;
+function extractBearerToken(req) {
+  const header = String(req.headers.authorization || "").trim();
 
-let lastCleanup =
-  0;
+  if (!header.startsWith("Bearer ")) {
+    return "";
+  }
 
-/*
- * ==========================================
- * GENERAR TOKEN
- * ==========================================
- *
- * Usamos 32 bytes aleatorios.
- *
- * Mucho más robusto que
- * mantener únicamente un UUID.
- */
-function generateToken() {
-  return randomBytes(
-    32,
-  ).toString(
-    "hex",
-  );
+  return header.slice(7).trim();
 }
 
 /*
  * ==========================================
- * LIMPIEZA DE SESIONES
+ * AUTENTICACIÓN MYSQL
  * ==========================================
  */
 
-function cleanupExpiredSessions(
-  force = false,
-) {
-  const currentTime =
-    Date.now();
-
-  if (
-    !force &&
-    currentTime -
-      lastCleanup <
-      CLEANUP_INTERVAL_MS
-  ) {
-    return;
-  }
-
-  lastCleanup =
-    currentTime;
-
-  const before =
-    store.sessions.length;
-
-  store.sessions =
-    store.sessions.filter(
-      (
-        session,
-      ) =>
-        Number(
-          session.expiresAt,
-        ) >
-        currentTime,
-    );
-
+export async function authenticate(req, res, next) {
   /*
-   * Solo escribimos db.json
-   * cuando realmente eliminamos
-   * alguna sesión.
+   * Express 5 puede manejar correctamente
+   * una función async y enviar el error al
+   * errorHandler.
    */
-  if (
-    store.sessions.length !==
-    before
-  ) {
-    persistStore();
+
+  const token = extractBearerToken(req);
+
+  if (!token) {
+    throw new HttpError(401, "Debes iniciar sesión");
   }
-}
-
-/*
- * ==========================================
- * CREAR SESIÓN
- * ==========================================
- */
-
-export function createSession(
-  userId,
-) {
-  cleanupExpiredSessions(
-    true,
-  );
 
   /*
-   * Evitamos acumular muchas
-   * sesiones antiguas para
-   * el mismo usuario.
+   * Limpiamos sesiones antiguas de forma
+   * periódica. No se ejecutará un DELETE
+   * en cada solicitud.
+   */
+  await cleanupExpiredSessions();
+
+  const session = await findSessionWithUser(token);
+
+  if (!session) {
+    throw new HttpError(401, "Sesión inválida o expirada");
+  }
+
+  /*
+   * mysql2 normalmente devuelve DATETIME
+   * como objeto Date.
    *
-   * Conservaremos solamente
-   * sesiones todavía válidas.
+   * También contemplamos string por
+   * compatibilidad.
    */
-  store.sessions =
-    store.sessions.filter(
-      (
-        session,
-      ) =>
-        !(
-          session.userId ===
-            userId &&
-          Number(
-            session.expiresAt,
-          ) <=
-            Date.now()
-        ),
-    );
+  const expiresAt =
+    session.expiresAt instanceof Date
+      ? session.expiresAt
+      : new Date(session.expiresAt);
 
-  const token =
-    generateToken();
+  if (Number.isNaN(expiresAt.getTime()) || expiresAt.getTime() <= Date.now()) {
+    await revokeSession(token);
 
-  const session = {
-    token,
+    throw new HttpError(401, "Tu sesión expiró. Inicia sesión nuevamente");
+  }
 
-    userId,
+  /*
+   * Si un administrador desactiva al
+   * usuario, sus tokens dejan de ser útiles.
+   */
+  if (!session.user || !session.user.active) {
+    await revokeSession(token);
 
-    createdAt:
-      new Date()
-        .toISOString(),
+    throw new HttpError(401, "El usuario ya no está disponible");
+  }
 
-    expiresAt:
-      Date.now() +
-      SESSION_MS,
+  /*
+   * Datos disponibles para todas las
+   * rutas posteriores.
+   */
+
+  req.authToken = token;
+
+  req.session = {
+    token: session.token,
+
+    userId: session.userId,
+
+    createdAt: session.createdAt,
+
+    expiresAt: session.expiresAt,
   };
 
-  store.sessions.push(
-    session,
-  );
-
-  /*
-   * FUNDAMENTAL:
-   *
-   * La sesión queda guardada
-   * físicamente en db.json.
-   */
-  persistStore();
-
-  return token;
-}
-
-/*
- * ==========================================
- * CERRAR SESIÓN
- * ==========================================
- */
-
-export function revokeSession(
-  token,
-) {
-  if (
-    !token
-  ) {
-    return;
-  }
-
-  const before =
-    store.sessions.length;
-
-  store.sessions =
-    store.sessions.filter(
-      (
-        session,
-      ) =>
-        session.token !==
-        token,
-    );
-
-  if (
-    store.sessions.length !==
-    before
-  ) {
-    persistStore();
-  }
-}
-
-/*
- * ==========================================
- * AUTENTICAR
- * ==========================================
- */
-
-export function authenticate(
-  req,
-  res,
-  next,
-) {
-  cleanupExpiredSessions();
-
-  const header =
-    String(
-      req.headers
-        .authorization ||
-        "",
-    );
-
-  const token =
-    header.startsWith(
-      "Bearer ",
-    )
-      ? header
-          .slice(
-            7,
-          )
-          .trim()
-      : "";
-
-  if (
-    !token
-  ) {
-    throw new HttpError(
-      401,
-
-      "Debes iniciar sesión",
-    );
-  }
-
-  const session =
-    store.sessions.find(
-      (
-        item,
-      ) =>
-        item.token ===
-        token,
-    );
-
-  if (
-    !session
-  ) {
-    throw new HttpError(
-      401,
-
-      "Sesión inválida o expirada",
-    );
-  }
-
-  /*
-   * Comprobación adicional
-   * por seguridad.
-   */
-  if (
-    Number(
-      session.expiresAt,
-    ) <=
-    Date.now()
-  ) {
-    revokeSession(
-      token,
-    );
-
-    throw new HttpError(
-      401,
-
-      "Tu sesión expiró. Inicia sesión nuevamente",
-    );
-  }
-
-  const user =
-    store.users.find(
-      (
-        item,
-      ) =>
-        item.id ===
-          session.userId &&
-        item.active,
-    );
-
-  if (
-    !user
-  ) {
-    revokeSession(
-      token,
-    );
-
-    throw new HttpError(
-      401,
-
-      "El usuario ya no está disponible",
-    );
-  }
-
-  req.authToken =
-    token;
-
-  req.session =
-    session;
-
   req.user = {
-    id:
-      user.id,
+    id: session.user.id,
 
-    username:
-      user.username,
+    username: session.user.username,
 
-    name:
-      user.name,
+    name: session.user.name,
 
-    role:
-      user.role,
+    role: session.user.role,
 
-    active:
-      user.active,
+    active: Boolean(session.user.active),
   };
 
   next();
@@ -347,24 +121,11 @@ export function authenticate(
  */
 
 export const requireRole =
-  (
-    ...roles
-  ) =>
-  (
-    req,
-    res,
-    next,
-  ) => {
-    if (
-      !req.user ||
-      !roles.includes(
-        req.user
-          .role,
-      )
-    ) {
+  (...roles) =>
+  (req, res, next) => {
+    if (!req.user || !roles.includes(req.user.role)) {
       throw new HttpError(
         403,
-
         "No tienes permisos para realizar esta operación",
       );
     }
