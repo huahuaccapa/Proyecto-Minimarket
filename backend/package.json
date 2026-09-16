@@ -8,11 +8,13 @@
     "node": ">=20"
   },
   "scripts": {
-    "dev": "node --watch src/server.js",
-    "start": "node src/server.js",
-    "test": "node --test",
-    "migrate:mysql": "node scripts/migrate-json-to-mysql.js"
-  },
+  "dev": "node --watch src/server.js",
+  "start": "node src/server.js",
+  "test": "node --test",
+  "migrate:mysql": "node scripts/migrate-json-to-mysql.js",
+  "db:export-schema": "node scripts/export-schema.js",
+  "db:import-aiven": "node scripts/import-schema-aiven.js"
+},
   "dependencies": {
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
