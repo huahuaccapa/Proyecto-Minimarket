@@ -22,17 +22,15 @@ import cashRoutes from "./modules/cash/cash.routes.js";
 
 import customersRoutes from "./modules/customers/customers.routes.js";
 
+import usersRoutes from "./modules/users/users.routes.js";
+
+import settingsRoutes from "./modules/settings/settings.routes.js";
+
 import { authenticate } from "./middlewares/auth.js";
 
 import { pool } from "./config/database.js";
 
 const router = Router();
-
-/*
- * ==========================================
- * HEALTH
- * ==========================================
- */
 
 router.get(
   "/health",
@@ -58,36 +56,84 @@ router.get(
   },
 );
 
-/*
- * AUTH NO REQUIERE SESIÓN PREVIA
- */
+router.use(
+  "/auth",
 
-router.use("/auth", authRoutes);
-
-/*
- * TODO LO DE ABAJO REQUIERE LOGIN
- */
+  authRoutes,
+);
 
 router.use(authenticate);
 
-router.use("/products", productsRoutes);
+router.use(
+  "/products",
 
-router.use("/catalogs", catalogsRoutes);
+  productsRoutes,
+);
 
-router.use("/inventory", inventoryRoutes);
+router.use(
+  "/catalogs",
 
-router.use("/sales", salesRoutes);
+  catalogsRoutes,
+);
 
-router.use("/purchases", purchasesRoutes);
+router.use(
+  "/inventory",
 
-router.use("/expenses", expensesRoutes);
+  inventoryRoutes,
+);
 
-router.use("/reports", reportsRoutes);
+router.use(
+  "/sales",
 
-router.use("/dashboard", dashboardRoutes);
+  salesRoutes,
+);
 
-router.use("/cash", cashRoutes);
+router.use(
+  "/purchases",
 
-router.use("/customers", customersRoutes);
+  purchasesRoutes,
+);
+
+router.use(
+  "/expenses",
+
+  expensesRoutes,
+);
+
+router.use(
+  "/reports",
+
+  reportsRoutes,
+);
+
+router.use(
+  "/dashboard",
+
+  dashboardRoutes,
+);
+
+router.use(
+  "/cash",
+
+  cashRoutes,
+);
+
+router.use(
+  "/customers",
+
+  customersRoutes,
+);
+
+router.use(
+  "/users",
+
+  usersRoutes,
+);
+
+router.use(
+  "/settings",
+
+  settingsRoutes,
+);
 
 export default router;
