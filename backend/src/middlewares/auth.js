@@ -109,6 +109,8 @@ export async function authenticate(req, res, next) {
     role: session.user.role,
 
     active: Boolean(session.user.active),
+
+    mustChangePassword: Boolean(session.user.mustChangePassword),
   };
 
   next();
