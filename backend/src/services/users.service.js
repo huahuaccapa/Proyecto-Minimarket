@@ -1,12 +1,4 @@
-import {
-  pool,
-} from "../config/database.js";
-
-/*
- * ==========================================
- * CONVERTIR FILA MYSQL → USUARIO JS
- * ==========================================
- */
+import { pool } from "../config/database.js";
 
 function mapUser(row) {
   if (!row) {
@@ -14,282 +6,319 @@ function mapUser(row) {
   }
 
   return {
-    id:
-      row.id,
+    id: row.id,
 
-    username:
-      row.username,
+    username: row.username,
 
-    name:
-      row.name,
+    name: row.name,
 
-    passwordHash:
-      row.passwordHash,
+    passwordHash: row.passwordHash,
 
-    role:
-      row.role,
+    role: row.role,
 
-    active:
-      Boolean(
-        row.active,
-      ),
+    active: Boolean(row.active),
 
-    passwordUpdatedAt:
-      row.passwordUpdatedAt ||
-      null,
+    mustChangePassword: Boolean(row.mustChangePassword),
 
-    createdAt:
-      row.createdAt ||
-      null,
+    passwordUpdatedAt: row.passwordUpdatedAt || null,
 
-    updatedAt:
-      row.updatedAt ||
-      null,
+    createdAt: row.createdAt || null,
+
+    updatedAt: row.updatedAt || null,
   };
 }
 
-/*
- * ==========================================
- * BUSCAR USUARIO POR USERNAME
- * ==========================================
- */
+const USER_SELECT = `
+  SELECT
+    id,
 
-export async function findUserByUsername(
-  username,
-) {
-  const normalized =
-    String(
-      username || "",
-    )
-      .trim()
-      .toLowerCase();
+    username,
+
+    name,
+
+    password_hash
+      AS passwordHash,
+
+    role,
+
+    active,
+
+    must_change_password
+      AS mustChangePassword,
+
+    password_updated_at
+      AS passwordUpdatedAt,
+
+    created_at
+      AS createdAt,
+
+    updated_at
+      AS updatedAt
+
+  FROM users
+`;
+
+export async function findUserByUsername(username) {
+  const normalized = String(username || "")
+    .trim()
+    .toLowerCase();
 
   if (!normalized) {
     return null;
   }
 
-  const [
-    rows,
-  ] =
-    await pool.execute(
-      `
-      SELECT
-        id,
-        username,
-        name,
-
-        password_hash
-          AS passwordHash,
-
-        role,
-        active,
-
-        password_updated_at
-          AS passwordUpdatedAt,
-
-        created_at
-          AS createdAt,
-
-        updated_at
-          AS updatedAt
-
-      FROM users
+  const [rows] = await pool.execute(
+    `
+      ${USER_SELECT}
 
       WHERE LOWER(username) = ?
 
       LIMIT 1
       `,
 
-      [
-        normalized,
-      ],
-    );
-
-  return mapUser(
-    rows[0],
+    [normalized],
   );
+
+  return mapUser(rows[0]);
 }
 
-/*
- * ==========================================
- * BUSCAR USUARIO ACTIVO POR USERNAME
- * ==========================================
- */
+export async function findActiveUserByUsername(username) {
+  const user = await findUserByUsername(username);
 
-export async function findActiveUserByUsername(
-  username,
-) {
-  const user =
-    await findUserByUsername(
-      username,
-    );
-
-  if (
-    !user ||
-    !user.active
-  ) {
-    return null;
-  }
-
-  return user;
+  return user && user.active ? user : null;
 }
 
-/*
- * ==========================================
- * BUSCAR USUARIO POR ID
- * ==========================================
- */
-
-export async function findUserById(
-  id,
-) {
+export async function findUserById(id) {
   if (!id) {
     return null;
   }
 
-  const [
-    rows,
-  ] =
-    await pool.execute(
-      `
-      SELECT
-        id,
-        username,
-        name,
-
-        password_hash
-          AS passwordHash,
-
-        role,
-        active,
-
-        password_updated_at
-          AS passwordUpdatedAt,
-
-        created_at
-          AS createdAt,
-
-        updated_at
-          AS updatedAt
-
-      FROM users
+  const [rows] = await pool.execute(
+    `
+      ${USER_SELECT}
 
       WHERE id = ?
 
       LIMIT 1
       `,
 
-      [
-        id,
-      ],
-    );
-
-  return mapUser(
-    rows[0],
+    [id],
   );
+
+  return mapUser(rows[0]);
 }
 
-/*
- * ==========================================
- * BUSCAR USUARIO ACTIVO POR ID
- * ==========================================
- */
+export async function findActiveUserById(id) {
+  const user = await findUserById(id);
 
-export async function findActiveUserById(
+  return user && user.active ? user : null;
+}
+
+export async function listUsers() {
+  const [rows] = await pool.execute(
+    `
+      ${USER_SELECT}
+
+      ORDER BY
+        CASE
+          WHEN role = 'Administrador'
+          THEN 0
+
+          ELSE 1
+        END,
+
+        name ASC,
+
+        username ASC
+      `,
+  );
+
+  return rows.map(mapUser).map(safeUser);
+}
+
+export async function createUser({
   id,
-) {
-  const user =
-    await findUserById(
-      id,
-    );
 
-  if (
-    !user ||
-    !user.active
-  ) {
-    return null;
+  username,
+
+  name,
+
+  passwordHash,
+
+  role,
+
+  active = true,
+
+  mustChangePassword = true,
+}) {
+  const now = new Date();
+
+  await pool.execute(
+    `
+    INSERT INTO users
+    (
+      id,
+
+      username,
+
+      name,
+
+      password_hash,
+
+      role,
+
+      active,
+
+      must_change_password,
+
+      password_updated_at,
+
+      created_at,
+
+      updated_at
+    )
+
+    VALUES
+    (
+      ?, ?, ?, ?, ?,
+      ?, ?, ?, ?, ?
+    )
+    `,
+
+    [
+      id,
+
+      String(username).trim().toLowerCase(),
+
+      String(name).trim(),
+
+      passwordHash,
+
+      role,
+
+      active ? 1 : 0,
+
+      mustChangePassword ? 1 : 0,
+
+      now,
+
+      now,
+
+      now,
+    ],
+  );
+
+  return findUserById(id);
+}
+
+export async function updateUser(userId, changes) {
+  const fields = [];
+
+  const values = [];
+
+  if (changes.username !== undefined) {
+    fields.push("username = ?");
+
+    values.push(String(changes.username).trim().toLowerCase());
   }
 
-  return user;
-}
+  if (changes.name !== undefined) {
+    fields.push("name = ?");
 
-/*
- * ==========================================
- * ACTUALIZAR CONTRASEÑA
- * ==========================================
- *
- * Se usa principalmente cuando encontramos
- * una contraseña SHA-256 antigua y queremos
- * migrarla automáticamente a scrypt.
- */
+    values.push(String(changes.name).trim());
+  }
+
+  if (changes.role !== undefined) {
+    fields.push("role = ?");
+
+    values.push(changes.role);
+  }
+
+  if (changes.active !== undefined) {
+    fields.push("active = ?");
+
+    values.push(changes.active ? 1 : 0);
+  }
+
+  if (!fields.length) {
+    return findUserById(userId);
+  }
+
+  fields.push("updated_at = ?");
+
+  values.push(new Date());
+
+  values.push(userId);
+
+  await pool.execute(
+    `
+    UPDATE users
+
+    SET
+      ${fields.join(", ")}
+
+    WHERE id = ?
+    `,
+
+    values,
+  );
+
+  return findUserById(userId);
+}
 
 export async function updatePasswordHash(
   userId,
-  passwordHash,
-) {
-  const now =
-    new Date();
 
-  const [
-    result,
-  ] =
-    await pool.execute(
-      `
+  passwordHash,
+
+  { mustChangePassword = false } = {},
+) {
+  const now = new Date();
+
+  const [result] = await pool.execute(
+    `
       UPDATE users
 
       SET
         password_hash = ?,
+
+        must_change_password = ?,
+
         password_updated_at = ?,
+
         updated_at = ?
 
       WHERE id = ?
       `,
 
-      [
-        passwordHash,
-        now,
-        now,
-        userId,
-      ],
-    );
-
-  return (
-    result.affectedRows >
-    0
+    [passwordHash, mustChangePassword ? 1 : 0, now, now, userId],
   );
+
+  return result.affectedRows > 0;
 }
 
-/*
- * ==========================================
- * USUARIO SEGURO PARA FRONTEND
- * ==========================================
- *
- * Nunca enviamos passwordHash.
- */
-
-export function safeUser(
-  user,
-) {
+export function safeUser(user) {
   if (!user) {
     return null;
   }
 
   return {
-    id:
-      user.id,
+    id: user.id,
 
-    username:
-      user.username,
+    username: user.username,
 
-    name:
-      user.name,
+    name: user.name,
 
-    role:
-      user.role,
+    role: user.role,
 
-    active:
-      Boolean(
-        user.active,
-      ),
+    active: Boolean(user.active),
+
+    mustChangePassword: Boolean(user.mustChangePassword),
+
+    passwordUpdatedAt: user.passwordUpdatedAt || null,
+
+    createdAt: user.createdAt || null,
+
+    updatedAt: user.updatedAt || null,
   };
 }
