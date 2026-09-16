@@ -1,10 +1,6 @@
-import {
-  randomBytes,
-} from "node:crypto";
+import { randomBytes } from "node:crypto";
 
-import {
-  pool,
-} from "../config/database.js";
+import { pool } from "../config/database.js";
 
 /*
  * ==========================================
@@ -14,11 +10,7 @@ import {
  * 12 horas.
  */
 
-export const SESSION_MS =
-  12 *
-  60 *
-  60 *
-  1000;
+export const SESSION_MS = 12 * 60 * 60 * 1000;
 
 /*
  * No necesitamos borrar sesiones expiradas
@@ -27,13 +19,9 @@ export const SESSION_MS =
  * Cada 15 minutos hacemos una limpieza.
  */
 
-const CLEANUP_INTERVAL_MS =
-  15 *
-  60 *
-  1000;
+const CLEANUP_INTERVAL_MS = 15 * 60 * 1000;
 
-let lastCleanup =
-  0;
+let lastCleanup = 0;
 
 /*
  * ==========================================
@@ -50,8 +38,7 @@ function generateToken() {
    *
    * sessions.token CHAR(64)
    */
-  return randomBytes(32)
-    .toString("hex");
+  return randomBytes(32).toString("hex");
 }
 
 /*
@@ -60,22 +47,14 @@ function generateToken() {
  * ==========================================
  */
 
-export async function cleanupExpiredSessions(
-  force = false,
-) {
-  const now =
-    Date.now();
+export async function cleanupExpiredSessions(force = false) {
+  const now = Date.now();
 
-  if (
-    !force &&
-    now - lastCleanup <
-      CLEANUP_INTERVAL_MS
-  ) {
+  if (!force && now - lastCleanup < CLEANUP_INTERVAL_MS) {
     return;
   }
 
-  lastCleanup =
-    now;
+  lastCleanup = now;
 
   await pool.execute(
     `
@@ -84,9 +63,7 @@ export async function cleanupExpiredSessions(
     WHERE expires_at <= ?
     `,
 
-    [
-      new Date(now),
-    ],
+    [new Date(now)],
   );
 }
 
@@ -96,24 +73,14 @@ export async function cleanupExpiredSessions(
  * ==========================================
  */
 
-export async function createSession(
-  userId,
-) {
-  await cleanupExpiredSessions(
-    true,
-  );
+export async function createSession(userId) {
+  await cleanupExpiredSessions(true);
 
-  const token =
-    generateToken();
+  const token = generateToken();
 
-  const createdAt =
-    new Date();
+  const createdAt = new Date();
 
-  const expiresAt =
-    new Date(
-      createdAt.getTime() +
-        SESSION_MS,
-    );
+  const expiresAt = new Date(createdAt.getTime() + SESSION_MS);
 
   await pool.execute(
     `
@@ -128,12 +95,7 @@ export async function createSession(
     VALUES (?, ?, ?, ?)
     `,
 
-    [
-      token,
-      userId,
-      createdAt,
-      expiresAt,
-    ],
+    [token, userId, createdAt, expiresAt],
   );
 
   return {
@@ -154,18 +116,13 @@ export async function createSession(
  * que llega una petición autenticada.
  */
 
-export async function findSessionWithUser(
-  token,
-) {
+export async function findSessionWithUser(token) {
   if (!token) {
     return null;
   }
 
-  const [
-    rows,
-  ] =
-    await pool.execute(
-      `
+  const [rows] = await pool.execute(
+    `
       SELECT
         s.token,
 
@@ -186,7 +143,10 @@ export async function findSessionWithUser(
 
         u.role,
 
-        u.active
+u.active,
+
+u.must_change_password
+  AS mustChangePassword
 
       FROM sessions s
 
@@ -198,48 +158,36 @@ export async function findSessionWithUser(
       LIMIT 1
       `,
 
-      [
-        token,
-      ],
-    );
+    [token],
+  );
 
-  const row =
-    rows[0];
+  const row = rows[0];
 
   if (!row) {
     return null;
   }
 
   return {
-    token:
-      row.token,
+    token: row.token,
 
-    userId:
-      row.userId,
+    userId: row.userId,
 
-    createdAt:
-      row.sessionCreatedAt,
+    createdAt: row.sessionCreatedAt,
 
-    expiresAt:
-      row.expiresAt,
+    expiresAt: row.expiresAt,
 
     user: {
-      id:
-        row.id,
+      id: row.id,
 
-      username:
-        row.username,
+      username: row.username,
 
-      name:
-        row.name,
+      name: row.name,
 
-      role:
-        row.role,
+      role: row.role,
 
-      active:
-        Boolean(
-          row.active,
-        ),
+      active: Boolean(row.active),
+
+      mustChangePassword: Boolean(row.mustChangePassword),
     },
   };
 }
@@ -250,68 +198,38 @@ export async function findSessionWithUser(
  * ==========================================
  */
 
-export async function revokeSession(
-  token,
-) {
+export async function revokeSession(token) {
   if (!token) {
     return false;
   }
 
-  const [
-    result,
-  ] =
-    await pool.execute(
-      `
+  const [result] = await pool.execute(
+    `
       DELETE FROM sessions
 
       WHERE token = ?
       `,
 
-      [
-        token,
-      ],
-    );
-
-  return (
-    result.affectedRows >
-    0
+    [token],
   );
+
+  return result.affectedRows > 0;
 }
 
-/*
- * ==========================================
- * CERRAR TODAS LAS SESIONES DE UN USUARIO
- * ==========================================
- *
- * No se usa todavía desde la interfaz,
- * pero queda correctamente preparado para
- * cambio de contraseña / cierre global.
- */
-
-export async function revokeAllUserSessions(
-  userId,
-) {
+export async function revokeAllUserSessions(userId) {
   if (!userId) {
     return 0;
   }
 
-  const [
-    result,
-  ] =
-    await pool.execute(
-      `
+  const [result] = await pool.execute(
+    `
       DELETE FROM sessions
 
       WHERE user_id = ?
       `,
 
-      [
-        userId,
-      ],
-    );
-
-  return Number(
-    result.affectedRows ||
-      0,
+    [userId],
   );
+
+  return Number(result.affectedRows || 0);
 }
