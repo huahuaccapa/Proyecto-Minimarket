@@ -27,6 +27,8 @@ import {
   X,
 } from 'lucide-react';
 
+import PasswordChangeGate from './PasswordChangeGate';
+
 const menuItems = [
   {
     id: 'dashboard',
@@ -198,6 +200,13 @@ export default function AppShell({
           : 'lg:grid-cols-[260px_1fr]'
       } transition-all duration-300`}
     >
+      <PasswordChangeGate
+  required={
+    Boolean(
+      user?.mustChangePassword,
+    )
+  }
+/>
       {mobileOpen && (
         <button
           type="button"
