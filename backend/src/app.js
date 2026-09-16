@@ -29,6 +29,8 @@ app.use(
     crossOriginResourcePolicy: {
       policy: "cross-origin",
     },
+
+    contentSecurityPolicy: false,
   }),
 );
 
@@ -42,38 +44,43 @@ app.use(
   cors({
     origin: (origin, callback) => {
       /*
-       * Herramientas como Postman,
-       * aplicaciones móviles nativas,
-       * pruebas internas, etc. pueden
-       * no enviar Origin.
+       * Permitimos solicitudes sin Origin.
+       *
+       * Ejemplos:
+       * - Postman
+       * - Thunder Client
+       * - curl
+       * - llamadas servidor a servidor
        */
       if (!origin) {
         callback(null, true);
-
-        return;
-      }
-
-      if (env.frontendUrls.includes(origin)) {
-        callback(null, true);
-
         return;
       }
 
       /*
-       * Permitimos Vercel previews
-       * únicamente cuando están bajo
-       * *.vercel.app.
-       *
-       * Esto será útil durante el deploy.
+       * Permitimos URLs configuradas
+       * explícitamente en FRONTEND_URL.
        */
-      if (
-        env.nodeEnv !== "production" &&
-        /^https:\/\/[a-z0-9-]+\.vercel\.app$/i.test(origin)
-      ) {
+      if (env.frontendUrls.includes(origin)) {
         callback(null, true);
-
         return;
       }
+
+      /*
+       * Permitimos previews y dominios
+       * generados por Vercel.
+       *
+       * Ejemplos:
+       *
+       * https://proyecto.vercel.app
+       * https://proyecto-git-main-usuario.vercel.app
+       */
+      if (/^https:\/\/[a-z0-9.-]+\.vercel\.app$/i.test(origin)) {
+        callback(null, true);
+        return;
+      }
+
+      console.warn(`⚠️ Origen bloqueado por CORS: ${origin}`);
 
       callback(new Error(`Origen no permitido por CORS: ${origin}`));
     },
@@ -83,6 +90,8 @@ app.use(
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
 
     allowedHeaders: ["Content-Type", "Authorization"],
+
+    optionsSuccessStatus: 204,
   }),
 );
 
@@ -118,11 +127,51 @@ if (env.nodeEnv !== "test") {
 
 /*
  * ==========================================
+ * RUTA PRINCIPAL
+ * ==========================================
+ *
+ * Evita que:
+ *
+ * GET /
+ *
+ * devuelva 404 en Render.
+ */
+
+app.get(
+  "/",
+
+  (req, res) => {
+    res.status(200).json({
+      success: true,
+
+      message: "API de Minimarket Mamá funcionando correctamente",
+
+      data: {
+        service: "minimarket-mama-api",
+
+        environment: env.nodeEnv,
+
+        status: "online",
+
+        health: "/api/health",
+
+        timestamp: new Date().toISOString(),
+      },
+    });
+  },
+);
+
+/*
+ * ==========================================
  * API
  * ==========================================
  */
 
-app.use("/api", routes);
+app.use(
+  "/api",
+
+  routes,
+);
 
 /*
  * ==========================================
