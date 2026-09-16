@@ -4,4 +4,5 @@ node_modules/
 dist/
 build/
 coverage/
-*.log
+*.logbackend.zip
+frontend.zip
