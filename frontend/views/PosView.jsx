@@ -551,7 +551,7 @@ export default function PosView({
       !code
     ) {
       const text =
-        'Ingresa o escanea un código de barras.';
+        'Escanea un código o escribe el nombre del producto.';
 
       showMessage(
         text,
@@ -606,7 +606,155 @@ export default function PosView({
 
   /*
    * ==========================================
-   * CÓDIGO MANUAL / LECTOR USB
+   * BÚSQUEDA MANUAL POR NOMBRE O CÓDIGO
+   * ==========================================
+   */
+
+  const addBySearch = (
+    rawValue,
+  ) => {
+    const value =
+      String(
+        rawValue ||
+          '',
+      ).trim();
+
+    if (
+      !value
+    ) {
+      const text =
+        'Escribe el nombre del producto o escanea su código.';
+
+      showMessage(
+        text,
+        'error',
+      );
+
+      return {
+        ok:
+          false,
+
+        message:
+          text,
+      };
+    }
+
+    /*
+     * Primero intentamos coincidencia exacta
+     * por código. Esto conserva el flujo del
+     * lector USB y de la cámara.
+     */
+    const exactBarcode =
+      products.find(
+        (
+          product,
+        ) =>
+          String(
+            product.barcode ||
+              '',
+          ).trim() ===
+          value,
+      );
+
+    if (
+      exactBarcode
+    ) {
+      return addProduct(
+        exactBarcode,
+      );
+    }
+
+    const normalized =
+      normalizeText(
+        value,
+      );
+
+    const exactName =
+      sellableProducts.find(
+        (
+          product,
+        ) =>
+          normalizeText(
+            product.name,
+          ) ===
+          normalized,
+      );
+
+    if (
+      exactName
+    ) {
+      return addProduct(
+        exactName,
+      );
+    }
+
+    const matches =
+      sellableProducts.filter(
+        (
+          product,
+        ) =>
+          normalizeText(
+            product.name,
+          ).includes(
+            normalized,
+          ) ||
+          normalizeText(
+            product.barcode,
+          ).includes(
+            normalized,
+          ),
+      );
+
+    if (
+      matches.length ===
+      1
+    ) {
+      return addProduct(
+        matches[0],
+      );
+    }
+
+    if (
+      matches.length >
+      1
+    ) {
+      const text =
+        'Encontré varios productos. Selecciona uno de la lista.';
+
+      showMessage(
+        text,
+        'success',
+      );
+
+      return {
+        ok:
+          false,
+
+        message:
+          text,
+      };
+    }
+
+    const text =
+      `No encontré productos para “${value}”.`;
+
+    showMessage(
+      text,
+      'error',
+    );
+
+    return {
+      ok:
+        false,
+
+      message:
+        text,
+    };
+  };
+
+  /*
+   * ==========================================
+   * CÓDIGO MANUAL / LECTOR USB / NOMBRE
    * ==========================================
    */
 
@@ -615,7 +763,7 @@ export default function PosView({
   ) => {
     event.preventDefault();
 
-    addByBarcode(
+    addBySearch(
       barcode,
     );
 
@@ -1039,33 +1187,98 @@ export default function PosView({
    * ==========================================
    */
 
+  const sellableProducts =
+    useMemo(
+      () =>
+        products.filter(
+          (
+            product,
+          ) =>
+            product.active !==
+              false &&
+            Number(
+              product.stock,
+            ) >
+              0 &&
+            !isExpired(
+              product.expirationDate,
+            ),
+        ),
+
+      [
+        products,
+      ],
+    );
+
+  /*
+   * ==========================================
+   * BÚSQUEDA POR NOMBRE / CÓDIGO
+   * ==========================================
+   */
+
+  const searchResults =
+    useMemo(
+      () => {
+        const term =
+          normalizeText(
+            barcode,
+          );
+
+        if (
+          !term
+        ) {
+          return [];
+        }
+
+        return sellableProducts
+          .filter(
+            (
+              product,
+            ) => {
+              const name =
+                normalizeText(
+                  product.name,
+                );
+
+              const code =
+                normalizeText(
+                  product.barcode,
+                );
+
+              return (
+                name.includes(
+                  term,
+                ) ||
+                code.includes(
+                  term,
+                )
+              );
+            },
+          )
+          .slice(
+            0,
+            8,
+          );
+      },
+
+      [
+        barcode,
+        sellableProducts,
+      ],
+    );
+
   const quickProducts =
-    products
-      .filter(
-        (
-          product,
-        ) =>
-          product.active !==
-            false &&
-          Number(
-            product.stock,
-          ) >
-            0 &&
-          !isExpired(
-            product.expirationDate,
-          ),
-      )
-      .slice(
-        0,
-        6,
-      );
+    sellableProducts.slice(
+      0,
+      6,
+    );
 
   return (
     <>
       <PageTitle
         eyebrow="Punto de venta"
         title="Caja rápida"
-        description="Escanea productos con la cámara, lector físico o código manual. El stock, la caja y los reportes se actualizan automáticamente."
+        description="Busca productos escribiendo su nombre o código, o véndelos usando la cámara o un lector físico. El stock, la caja y los reportes se actualizan automáticamente."
       />
 
       {/* ======================================
@@ -1187,8 +1400,7 @@ export default function PosView({
               }
             >
               <label className="text-sm font-black">
-                Código manual
-                o lector USB
+                Buscar producto o escanear código
               </label>
 
               <div className="mt-3 flex gap-3">
@@ -1208,10 +1420,10 @@ export default function PosView({
                     disabled={
                       !cashOpen
                     }
-                    inputMode="numeric"
+                    inputMode="text"
                     autoComplete="off"
                     className="field pl-12 text-lg font-bold disabled:cursor-not-allowed disabled:opacity-50"
-                    placeholder="Escanea o escribe el código"
+                    placeholder="Ej. KR, pastelito, Coca Cola o código de barras"
                     value={
                       barcode
                     }
@@ -1245,6 +1457,68 @@ export default function PosView({
                   </span>
                 </button>
               </div>
+
+              {barcode.trim() &&
+                searchResults.length >
+                  0 && (
+                  <div className="mt-3 overflow-hidden rounded-2xl border border-black/5 bg-white shadow-sm">
+                    <div className="border-b border-black/5 px-4 py-2 text-xs font-black uppercase tracking-wide text-black/35">
+                      Productos encontrados
+                    </div>
+
+                    <div className="max-h-72 overflow-y-auto">
+                      {searchResults.map(
+                        (
+                          product,
+                        ) => (
+                          <button
+                            key={
+                              product.id
+                            }
+                            type="button"
+                            className="flex w-full items-center justify-between gap-4 border-b border-black/5 px-4 py-3 text-left transition last:border-b-0 hover:bg-mint/40"
+                            onClick={() =>
+                              addProduct(
+                                product,
+                              )
+                            }
+                          >
+                            <div className="min-w-0">
+                              <p className="truncate font-black">
+                                {
+                                  product.name
+                                }
+                              </p>
+
+                              <p className="mt-1 text-xs text-black/40">
+                                {product.barcode
+                                  ? `Código: ${product.barcode}`
+                                  : 'Sin código de barras'}
+                                {' · '}
+                                Stock: {Number(
+                                  product.stock ||
+                                    0,
+                                )}
+                              </p>
+                            </div>
+
+                            <div className="shrink-0 text-right">
+                              <p className="font-black text-forest">
+                                {formatMoney(
+                                  product.salePrice,
+                                )}
+                              </p>
+
+                              <p className="text-xs font-bold text-black/35">
+                                Agregar
+                              </p>
+                            </div>
+                          </button>
+                        ),
+                      )}
+                    </div>
+                  </div>
+                )}
 
               {message && (
                 <div
