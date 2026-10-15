@@ -1,0 +1,12 @@
+MINIMARKET MAMA - INSTALACION NUEVA CON ADMIN Y AYDEE
+
+Solo usar sobre bases NUEVAS Y VACIAS. No restaura datos antiguos.
+
+1. Para MySQL local: abrir minimarket_mama_instalacion_local.sql en Workbench, ejecutar en MySQL Local.
+2. Para Aiven Free: conectar Workbench a Aiven por TLS y abrir instalacion_aiven_defaultdb.sql en la conexion Aiven. Ejecutar solamente si defaultdb no tiene tablas del minimarket.
+3. Verificar: SELECT username, name, role, active, must_change_password FROM users ORDER BY username;
+4. Esperado: admin / Administrador y aydee / Vendedora; ambos active=1, must_change_password=1.
+5. Configurar en Render los valores DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD, DB_SSL=true y el certificado CA/SSL según el backend. No publicar las credenciales.
+6. Al entrar, cambiar las dos contraseñas. Después borrar el archivo de credenciales temporales.
+
+ATENCION: Instalar local y luego ejecutar en Aiven son dos instalaciones separadas, no una sincronizacion. Si ingresas datos en local, debes exportarlos/importarlos antes de usarlos en Aiven.

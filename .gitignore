@@ -6,3 +6,6 @@ build/
 coverage/
 *.logbackend.zip
 frontend.zip
+
+/Aiven/ca.pem
+/kit_mysql_minimarket_admin_aydee/CREDENCIALES_TEMPORALES_PRIVADAS.txt
